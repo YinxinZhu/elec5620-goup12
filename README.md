@@ -43,4 +43,4 @@ flask --app app run --debug
 
 Demo credentials are seeded via `seed-demo` (`coach@example.com` / `password123`).
 
-The application stores data in `app/instance/app.db` by default (SQLite). Configure `DATABASE_URL` for PostgreSQL or other engines in production.
+The application stores data in `instance/app.db` by default (SQLite). Configure `DATABASE_URL` for PostgreSQL or other engines in production.
