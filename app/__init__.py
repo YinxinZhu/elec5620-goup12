@@ -3,6 +3,8 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from flask_login import LoginManager
 from pathlib import Path
+from sqlalchemy.engine import make_url
+from sqlalchemy.exc import ArgumentError
 
 from .config import Config
 
@@ -13,9 +15,22 @@ login_manager.login_view = "coach.login"
 
 def create_app(config_class: type[Config] | None = None) -> Flask:
     app = Flask(__name__, template_folder=str(Path(__file__).parent / "templates"))
-    Path(app.instance_path).mkdir(parents=True, exist_ok=True)
     config = config_class or Config
     app.config.from_object(config)
+
+    Path(app.instance_path).mkdir(parents=True, exist_ok=True)
+
+    db_uri = app.config.get("SQLALCHEMY_DATABASE_URI")
+    if db_uri:
+        try:
+            url = make_url(db_uri)
+        except ArgumentError:
+            url = None
+        if url and url.drivername == "sqlite" and url.database:
+            db_path = Path(url.database)
+            if not db_path.is_absolute():
+                db_path = Path(app.root_path) / db_path
+            db_path.parent.mkdir(parents=True, exist_ok=True)
 
     db.init_app(app)
     migrate.init_app(app, db)
