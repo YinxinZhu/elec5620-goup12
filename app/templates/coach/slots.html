@@ -1,0 +1,65 @@
+{% extends 'base.html' %}
+{% block title %}Availability{% endblock %}
+{% block content %}
+<h1 class="h3 mb-4">Availability management</h1>
+<div class="card mb-4">
+  <div class="card-body">
+    <h2 class="h5">Add a new slot</h2>
+    <form method="post" class="row g-3">
+      <div class="col-md-4">
+        <label class="form-label" for="start_time">Start time</label>
+        <input type="datetime-local" class="form-control" id="start_time" name="start_time" required>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label" for="duration">Duration</label>
+        <select class="form-select" id="duration" name="duration">
+          <option value="30">30 minutes</option>
+          <option value="60">60 minutes</option>
+        </select>
+      </div>
+      <div class="col-md-5">
+        <label class="form-label" for="location">Meeting location</label>
+        <input class="form-control" id="location" name="location" placeholder="Sydney Olympic Park" required>
+      </div>
+      <div class="col-12">
+        <button class="btn btn-primary" type="submit">Add slot</button>
+      </div>
+    </form>
+  </div>
+</div>
+<h2 class="h5">Your slots</h2>
+{% if slots %}
+<div class="table-responsive">
+  <table class="table align-middle">
+    <thead>
+      <tr>
+        <th>Start</th>
+        <th>Duration</th>
+        <th>Location</th>
+        <th>Status</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for slot in slots %}
+      <tr>
+        <td>{{ slot.start_time.strftime('%d %b %Y %H:%M') }}</td>
+        <td>{{ slot.duration_minutes }} min</td>
+        <td>{{ slot.location_text }}</td>
+        <td>
+          <span class="badge bg-{{ 'success' if slot.status == 'available' else 'warning' if slot.status == 'booked' else 'secondary' }}">{{ slot.status|capitalize }}</span>
+        </td>
+        <td class="text-end">
+          <form method="post" action="{{ url_for('coach.delete_slot', slot_id=slot.id) }}" onsubmit="return confirm('Delete this slot?');">
+            <button type="submit" class="btn btn-sm btn-outline-danger" {% if slot.appointment and slot.appointment.status == 'booked' %}disabled{% endif %}>Delete</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="alert alert-info">No availability yet. Add your first slot above.</div>
+{% endif %}
+{% endblock %}
