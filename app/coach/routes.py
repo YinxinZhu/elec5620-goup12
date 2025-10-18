@@ -13,6 +13,7 @@ from flask import (
 )
 from flask_login import current_user, login_required, login_user, logout_user
 from sqlalchemy import func
+from urllib.parse import urljoin, urlparse
 
 from .. import db
 from ..models import Appointment, AvailabilitySlot, Coach, MockExamSummary, Student
@@ -25,6 +26,15 @@ def _parse_vehicle_types(values: Iterable[str]) -> str:
     cleaned = {v for v in (value.strip().upper() for value in values) if v in allowed}
     return ",".join(sorted(cleaned))
 
+def _is_safe_redirect_target(target: str | None) -> bool:
+    if not target:
+        return False
+    host_url = request.host_url
+    redirect_url = urljoin(host_url, target)
+    host_parts = urlparse(host_url)
+    redirect_parts = urlparse(redirect_url)
+    return host_parts.scheme == redirect_parts.scheme and host_parts.netloc == redirect_parts.netloc
+
 
 @coach_bp.route("/login", methods=["GET", "POST"])
 def login():
@@ -36,6 +46,8 @@ def login():
             login_user(coach)
             flash("Welcome back!", "success")
             next_url = request.args.get("next")
+            if not _is_safe_redirect_target(next_url):
+                next_url = None
             return redirect(next_url or url_for("coach.dashboard"))
         flash("Invalid email or password", "danger")
     return render_template("coach/login.html")
