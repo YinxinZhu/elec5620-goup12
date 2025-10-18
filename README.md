@@ -13,6 +13,25 @@ This repository implements the coach-facing features for the DriveWise driving t
 
 ## Getting started
 
+### Cloning the correct branch
+
+When the repository is first cloned it may default to an empty `main` branch. The
+full implementation lives on the `codex/define-core-features-for-student-module`
+branch. Fetch all remote references and create a local branch that tracks the
+remote using either `git checkout` or the newer `git switch` syntax:
+
+```bash
+git fetch --all
+git checkout -b define-core-features-for-student-module \
+  origin/codex/define-core-features-for-student-module
+# or
+git switch --track origin/codex/define-core-features-for-student-module
+```
+
+After the branch is checked out your IDE should show the complete project
+structure. Subsequent updates can be pulled with `git pull` while on this
+branch.
+
 ```bash
 python -m venv .venv
 source .venv/bin/activate
