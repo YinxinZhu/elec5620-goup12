@@ -13,6 +13,7 @@ login_manager.login_view = "coach.login"
 
 def create_app(config_class: type[Config] | None = None) -> Flask:
     app = Flask(__name__, template_folder=str(Path(__file__).parent / "templates"))
+    Path(app.instance_path).mkdir(parents=True, exist_ok=True)
     config = config_class or Config
     app.config.from_object(config)
 
