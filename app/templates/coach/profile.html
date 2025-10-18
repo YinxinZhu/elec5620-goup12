@@ -1,0 +1,42 @@
+{% extends 'base.html' %}
+{% block title %}My Profile{% endblock %}
+{% block content %}
+<h1 class="h3 mb-4">My Profile</h1>
+<form method="post" class="row g-3">
+  <div class="col-md-6">
+    <label class="form-label" for="name">Name</label>
+    <input class="form-control" id="name" name="name" value="{{ current_user.name }}" required>
+  </div>
+  <div class="col-md-6">
+    <label class="form-label" for="phone">Phone</label>
+    <input class="form-control" id="phone" name="phone" value="{{ current_user.phone }}" required>
+  </div>
+  <div class="col-md-6">
+    <label class="form-label" for="city">City</label>
+    <input class="form-control" id="city" name="city" value="{{ current_user.city }}" required>
+  </div>
+  <div class="col-md-6">
+    <label class="form-label" for="state">State</label>
+    <input class="form-control" id="state" name="state" value="{{ current_user.state }}" maxlength="10" required>
+  </div>
+  <div class="col-12">
+    <span class="form-label d-block">Vehicle types</span>
+    {% set selected = current_user.vehicle_type_list() %}
+    <div class="form-check form-check-inline">
+      <input class="form-check-input" type="checkbox" id="vehicleAT" name="vehicle_types" value="AT" {% if 'AT' in selected %}checked{% endif %}>
+      <label class="form-check-label" for="vehicleAT">Automatic (AT)</label>
+    </div>
+    <div class="form-check form-check-inline">
+      <input class="form-check-input" type="checkbox" id="vehicleMT" name="vehicle_types" value="MT" {% if 'MT' in selected %}checked{% endif %}>
+      <label class="form-check-label" for="vehicleMT">Manual (MT)</label>
+    </div>
+  </div>
+  <div class="col-12">
+    <label class="form-label" for="bio">About you</label>
+    <textarea class="form-control" id="bio" name="bio" rows="4">{{ current_user.bio }}</textarea>
+  </div>
+  <div class="col-12">
+    <button class="btn btn-primary" type="submit">Save changes</button>
+  </div>
+</form>
+{% endblock %}

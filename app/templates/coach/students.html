@@ -1,0 +1,39 @@
+{% extends 'base.html' %}
+{% block title %}My Students{% endblock %}
+{% block content %}
+<h1 class="h3 mb-4">My Students</h1>
+{% if students %}
+<div class="table-responsive">
+  <table class="table align-middle">
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Email</th>
+        <th>State</th>
+        <th>Mock exam attempts</th>
+        <th>Last score</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for student in students %}
+      <tr>
+        <td>{{ student.name }}</td>
+        <td>{{ student.email }}</td>
+        <td>{{ student.state }}</td>
+        <td>{{ summaries[student.id].attempts }}</td>
+        <td>
+          {% if summaries[student.id].last_score is not none %}
+            {{ summaries[student.id].last_score }}%
+          {% else %}
+            <span class="text-muted">No data</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="alert alert-info">No students assigned yet.</div>
+{% endif %}
+{% endblock %}

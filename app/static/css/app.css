@@ -1,0 +1,16 @@
+body {
+  background-color: #f5f6f8;
+}
+
+.navbar-brand {
+  font-weight: 600;
+}
+
+.card {
+  border-radius: 0.75rem;
+}
+
+.table thead th {
+  background-color: #f1f3f5;
+  border-bottom: 0;
+}
