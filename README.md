@@ -1,4 +1,4 @@
-# DriveWise Learning Platform (Coach Module)
+# Coach Module
 
 This repository implements the coach-facing features for the DriveWise driving theory preparation platform. It is built with Flask, SQLAlchemy, and Bootstrap.
 
