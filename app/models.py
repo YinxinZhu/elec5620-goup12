@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 
 from flask_login import UserMixin
-from sqlalchemy import CheckConstraint, UniqueConstraint, Enum
+from sqlalchemy import Boolean, CheckConstraint, Enum, UniqueConstraint
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from . import db
@@ -53,6 +53,18 @@ class Student(db.Model):
         "MockExamSummary", back_populates="student", cascade="all, delete-orphan"
     )
     bookings = db.relationship("Appointment", back_populates="student")
+    state_progress = db.relationship(
+        "StudentStateProgress", back_populates="student", cascade="all, delete-orphan"
+    )
+    exam_sessions = db.relationship(
+        "StudentExamSession", back_populates="student", cascade="all, delete-orphan"
+    )
+    question_attempts = db.relationship(
+        "QuestionAttempt", back_populates="student", cascade="all, delete-orphan"
+    )
+    notebook_entries = db.relationship(
+        "NotebookEntry", back_populates="student", cascade="all, delete-orphan"
+    )
 
 
 class MockExamSummary(db.Model):
@@ -60,10 +72,43 @@ class MockExamSummary(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     student_id = db.Column(db.Integer, db.ForeignKey("students.id"), nullable=False)
+    state = db.Column(db.String(10), nullable=False)
     score = db.Column(db.Integer, nullable=False)
     taken_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
 
     student = db.relationship("Student", back_populates="mock_exam_summaries")
+
+
+class QuestionAttempt(db.Model):
+    __tablename__ = "question_attempts"
+
+    id = db.Column(db.Integer, primary_key=True)
+    student_id = db.Column(db.Integer, db.ForeignKey("students.id"), nullable=False)
+    question_id = db.Column(db.Integer, db.ForeignKey("questions.id"), nullable=False)
+    state = db.Column(db.String(10), nullable=False)
+    is_correct = db.Column(Boolean, nullable=False, default=False)
+    attempted_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    student = db.relationship("Student", back_populates="question_attempts")
+    question = db.relationship("Question")
+
+
+class NotebookEntry(db.Model):
+    __tablename__ = "notebook_entries"
+
+    id = db.Column(db.Integer, primary_key=True)
+    student_id = db.Column(db.Integer, db.ForeignKey("students.id"), nullable=False)
+    question_id = db.Column(db.Integer, db.ForeignKey("questions.id"), nullable=False)
+    state = db.Column(db.String(10), nullable=False)
+    wrong_count = db.Column(db.Integer, nullable=False, default=0)
+    last_wrong_at = db.Column(db.DateTime)
+
+    student = db.relationship("Student", back_populates="notebook_entries")
+    question = db.relationship("Question")
+
+    __table_args__ = (
+        UniqueConstraint("student_id", "question_id", "state", name="uq_notebook_scope"),
+    )
 
 
 class AvailabilitySlot(db.Model):
@@ -118,10 +163,72 @@ class Appointment(db.Model):
     student = db.relationship("Student", back_populates="bookings")
 
 
+class ExamRule(db.Model):
+    __tablename__ = "exam_rules"
+
+    state = db.Column(db.String(10), primary_key=True)
+    total_questions = db.Column(db.Integer, nullable=False)
+    pass_mark = db.Column(db.Integer, nullable=False)
+    time_limit_minutes = db.Column(db.Integer, nullable=False)
+
+
+class Question(db.Model):
+    __tablename__ = "questions"
+
+    id = db.Column(db.Integer, primary_key=True)
+    qid = db.Column(db.String(50), nullable=False)
+    prompt = db.Column(db.Text, nullable=False)
+    state_scope = db.Column(db.String(10), nullable=False, default="ALL")
+
+    __table_args__ = (
+        UniqueConstraint("qid", "state_scope", name="uq_question_qid_scope"),
+    )
+
+
+class StudentStateProgress(db.Model):
+    __tablename__ = "student_state_progress"
+
+    id = db.Column(db.Integer, primary_key=True)
+    student_id = db.Column(db.Integer, db.ForeignKey("students.id"), nullable=False)
+    state = db.Column(db.String(10), nullable=False)
+    total_attempts = db.Column(db.Integer, nullable=False, default=0)
+    best_score = db.Column(db.Integer)
+    last_active_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    student = db.relationship("Student", back_populates="state_progress")
+
+    __table_args__ = (
+        UniqueConstraint("student_id", "state", name="uq_progress_student_state"),
+    )
+
+
+class StudentExamSession(db.Model):
+    __tablename__ = "student_exam_sessions"
+
+    id = db.Column(db.Integer, primary_key=True)
+    student_id = db.Column(db.Integer, db.ForeignKey("students.id"), nullable=False)
+    state = db.Column(db.String(10), nullable=False)
+    status = db.Column(
+        Enum("ongoing", "submitted", "abandoned", name="exam_session_status"),
+        nullable=False,
+        default="ongoing",
+    )
+    started_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    finished_at = db.Column(db.DateTime)
+
+    student = db.relationship("Student", back_populates="exam_sessions")
+
+
 __all__ = [
     "Coach",
     "Student",
     "MockExamSummary",
     "AvailabilitySlot",
     "Appointment",
+    "ExamRule",
+    "Question",
+    "StudentStateProgress",
+    "StudentExamSession",
+    "QuestionAttempt",
+    "NotebookEntry",
 ]

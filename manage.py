@@ -38,9 +38,9 @@ def seed_demo() -> None:
     ]
 
     summaries = [
-        MockExamSummary(student=students[0], score=88),
-        MockExamSummary(student=students[0], score=92),
-        MockExamSummary(student=students[1], score=75),
+        MockExamSummary(student=students[0], state="NSW", score=88),
+        MockExamSummary(student=students[0], state="NSW", score=92),
+        MockExamSummary(student=students[1], state="NSW", score=75),
     ]
 
     now = datetime.utcnow()
