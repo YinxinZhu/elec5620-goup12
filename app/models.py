@@ -28,7 +28,7 @@ class Coach(AccountUserMixin, db.Model):
     email = db.Column(db.String(120), unique=True, nullable=False)
     password_hash = db.Column(db.String(255), nullable=False)
     name = db.Column(db.String(120), nullable=False)
-    phone = db.Column(db.String(50), nullable=False)
+    mobile_number = db.Column("phone", db.String(20), unique=True, nullable=False)
     city = db.Column(db.String(100), nullable=False)
     state = db.Column(db.String(10), nullable=False)
     vehicle_types = db.Column(db.String(20), nullable=False)  # comma separated AT/MT
