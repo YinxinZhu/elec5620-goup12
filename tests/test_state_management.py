@@ -14,6 +14,7 @@ from app.config import TestConfig
 from app.models import (
     Coach,
     ExamRule,
+    MockExamPaper,
     MockExamSummary,
     NotebookEntry,
     Question,
@@ -49,7 +50,14 @@ def app_context():
 
 @pytest.fixture
 def sample_data(app_context):
-    student = Student(name="Jamie", email="jamie@example.com", state="NSW")
+    student = Student(
+        name="Jamie",
+        email="jamie@example.com",
+        state="NSW",
+        mobile_number="0400000001",
+        preferred_language="ENGLISH",
+    )
+    student.set_password("password123")
     coach_nsw = Coach(
         email="nsw@example.com",
         password_hash="hash",
@@ -76,11 +84,47 @@ def sample_data(app_context):
             coach_vic,
             ExamRule(state="NSW", total_questions=45, pass_mark=38, time_limit_minutes=45),
             ExamRule(state="VIC", total_questions=42, pass_mark=36, time_limit_minutes=40),
-            Question(qid="q1", prompt="Shared question", state_scope="ALL"),
-            Question(qid="q2", prompt="NSW question", state_scope="NSW"),
-            Question(qid="q2", prompt="VIC variant", state_scope="VIC"),
+            Question(
+                qid="q1",
+                prompt="Shared question",
+                state_scope="ALL",
+                topic="core",
+                option_a="A",
+                option_b="B",
+                option_c="C",
+                option_d="D",
+                correct_option="A",
+                explanation="Because",
+            ),
+            Question(
+                qid="q2",
+                prompt="NSW question",
+                state_scope="NSW",
+                topic="state",
+                option_a="A",
+                option_b="B",
+                option_c="C",
+                option_d="D",
+                correct_option="B",
+                explanation="NSW",
+            ),
+            Question(
+                qid="q2",
+                prompt="VIC variant",
+                state_scope="VIC",
+                topic="state",
+                option_a="A",
+                option_b="B",
+                option_c="C",
+                option_d="D",
+                correct_option="C",
+                explanation="VIC",
+            ),
         ]
     )
+    paper_nsw = MockExamPaper(state="NSW", title="NSW Paper 1", time_limit_minutes=45)
+    paper_vic = MockExamPaper(state="VIC", title="VIC Paper 1", time_limit_minutes=40)
+    db.session.add_all([paper_nsw, paper_vic])
     db.session.commit()
     return student
 
@@ -93,8 +137,30 @@ def progress_dataset(sample_data):
     shared_question = Question.query.filter_by(qid="q1", state_scope="ALL").one()
     nsw_question = Question.query.filter_by(qid="q2", state_scope="NSW").one()
 
-    extra_nsw_question = Question(qid="q3", prompt="Extra NSW question", state_scope="NSW")
-    vic_extra_question = Question(qid="q4", prompt="Extra VIC question", state_scope="VIC")
+    extra_nsw_question = Question(
+        qid="q3",
+        prompt="Extra NSW question",
+        state_scope="NSW",
+        topic="state",
+        option_a="A",
+        option_b="B",
+        option_c="C",
+        option_d="D",
+        correct_option="A",
+        explanation="Extra",
+    )
+    vic_extra_question = Question(
+        qid="q4",
+        prompt="Extra VIC question",
+        state_scope="VIC",
+        topic="state",
+        option_a="A",
+        option_b="B",
+        option_c="C",
+        option_d="D",
+        correct_option="A",
+        explanation="Extra",
+    )
     db.session.add_all([extra_nsw_question, vic_extra_question])
     db.session.commit()
 
@@ -105,6 +171,8 @@ def progress_dataset(sample_data):
                 question_id=shared_question.id,
                 state="NSW",
                 is_correct=True,
+                chosen_option="A",
+                time_spent_seconds=30,
                 attempted_at=now - timedelta(days=1),
             ),
             QuestionAttempt(
@@ -112,6 +180,8 @@ def progress_dataset(sample_data):
                 question_id=nsw_question.id,
                 state="NSW",
                 is_correct=False,
+                chosen_option="C",
+                time_spent_seconds=45,
                 attempted_at=now - timedelta(hours=3),
             ),
             QuestionAttempt(
@@ -119,6 +189,8 @@ def progress_dataset(sample_data):
                 question_id=nsw_question.id,
                 state="NSW",
                 is_correct=True,
+                chosen_option="B",
+                time_spent_seconds=40,
                 attempted_at=now - timedelta(hours=1),
             ),
             QuestionAttempt(
@@ -126,6 +198,8 @@ def progress_dataset(sample_data):
                 question_id=vic_extra_question.id,
                 state="VIC",
                 is_correct=False,
+                chosen_option="B",
+                time_spent_seconds=50,
                 attempted_at=now - timedelta(days=2),
             ),
         ]
@@ -221,10 +295,42 @@ def test_switching_same_state_initialises_and_refreshes_progress(sample_data):
 
     assert refreshed.last_active_at >= initial_last_active
 
+
+def test_switching_handles_legacy_lowercase_state(sample_data):
+    student = sample_data
+    # Simulate legacy lowercase data
+    student.state = "nsw"
+    db.session.add_all(
+        [
+            StudentStateProgress(student_id=student.id, state="nsw"),
+            StudentExamSession(
+                student_id=student.id,
+                state="nsw",
+                paper_id=MockExamPaper.query.filter_by(state="NSW").first().id,
+                status="ongoing",
+            ),
+        ]
+    )
+    db.session.commit()
+
+    summary = switch_student_state(student, "nsw", acting_student=student)
+
+    assert "NSW" in summary
+    assert student.state == "NSW"
+
+    progress_records = StudentStateProgress.query.filter_by(student_id=student.id).all()
+    assert len(progress_records) == 1
+    assert progress_records[0].state == "NSW"
+
 def test_switching_blocked_with_active_exam(sample_data):
     student = sample_data
     db.session.add(
-        StudentExamSession(student_id=student.id, state="NSW", status="ongoing")
+        StudentExamSession(
+            student_id=student.id,
+            state="NSW",
+            paper_id=MockExamPaper.query.filter_by(state="NSW").first().id,
+            status="ongoing",
+        )
     )
     db.session.commit()
 
@@ -233,14 +339,28 @@ def test_switching_blocked_with_active_exam(sample_data):
 
 
 def test_switch_requires_persisted_student(app_context):
-    transient_student = Student(name="Temp", email="temp@example.com", state="NSW")
+    transient_student = Student(
+        name="Temp",
+        email="temp@example.com",
+        state="NSW",
+        mobile_number="0400000099",
+        preferred_language="ENGLISH",
+    )
+    transient_student.set_password("password123")
     with pytest.raises(StateSwitchValidationError):
         switch_student_state(transient_student, "VIC")
 
 
 def test_switch_forbids_updating_other_users(sample_data):
     student = sample_data
-    other_student = Student(name="Lee", email="lee@example.com", state="VIC")
+    other_student = Student(
+        name="Lee",
+        email="lee@example.com",
+        state="VIC",
+        mobile_number="0400000002",
+        preferred_language="ENGLISH",
+    )
+    other_student.set_password("password123")
     db.session.add(other_student)
     db.session.commit()
 
@@ -279,7 +399,14 @@ def test_progress_summary_rejects_invalid_state(progress_dataset):
 
 def test_progress_summary_enforces_self_access(progress_dataset):
     student = progress_dataset
-    other_student = Student(name="Morgan", email="morgan@example.com", state="NSW")
+    other_student = Student(
+        name="Morgan",
+        email="morgan@example.com",
+        state="NSW",
+        mobile_number="0400000003",
+        preferred_language="ENGLISH",
+    )
+    other_student.set_password("password123")
     db.session.add(other_student)
     db.session.commit()
 
@@ -305,7 +432,14 @@ def test_progress_csv_export_marks_pending(progress_dataset):
     vic_rows = list(csv.DictReader(vic_csv.splitlines()))
     assert any(row["correctness"] == "incorrect" for row in vic_rows)
 
-    other_student = Student(name="Chris", email="chris@example.com", state="NSW")
+    other_student = Student(
+        name="Chris",
+        email="chris@example.com",
+        state="NSW",
+        mobile_number="0400000004",
+        preferred_language="ENGLISH",
+    )
+    other_student.set_password("password123")
     db.session.add(other_student)
     db.session.commit()
 

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import or_
+from sqlalchemy import func, or_
 
 from .. import db
 from ..models import (
@@ -36,6 +36,12 @@ def _normalise_state_code(state_code: str) -> str:
     return code
 
 
+def _normalise_existing_state(state_code: str | None) -> str:
+    """Return a normalised state code for existing records without validation."""
+
+    return (state_code or "").strip().upper()
+
+
 def _get_rule_or_error(state_code: str) -> ExamRule:
     rule = ExamRule.query.filter_by(state=state_code).first()
     if not rule:
@@ -65,6 +71,7 @@ def switch_student_state(
         raise StateSwitchValidationError("Student must be persisted before switching state.")
 
     desired_state = _normalise_state_code(new_state)
+    current_state = _normalise_existing_state(student.state)
 
     if acting_student and acting_student.id != student.id:
         raise StateSwitchPermissionError("Users may only change their own state.")
@@ -72,21 +79,25 @@ def switch_student_state(
     active_exam = (
         StudentExamSession.query.filter_by(student_id=student.id, status="ongoing").first()
     )
-    if active_exam and desired_state != student.state:
+    if active_exam and desired_state != current_state:
         raise StateSwitchError("State switching is disabled during an ongoing exam.")
 
     rule = _get_rule_or_error(desired_state)
 
-    progress = StudentStateProgress.query.filter_by(
-        student_id=student.id, state=desired_state
-    ).first()
+    progress = (
+        StudentStateProgress.query.filter_by(student_id=student.id)
+        .filter(func.upper(StudentStateProgress.state) == desired_state)
+        .first()
+    )
     if not progress:
         progress = StudentStateProgress(student_id=student.id, state=desired_state)
         db.session.add(progress)
+    elif progress.state != desired_state:
+        progress.state = desired_state
 
     progress.last_active_at = datetime.utcnow()
 
-    if desired_state != student.state:
+    if student.state != desired_state:
         student.state = desired_state
 
     db.session.commit()
