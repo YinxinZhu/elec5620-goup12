@@ -6,12 +6,13 @@ from pathlib import Path
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import ArgumentError
 
-from .config import Config
-
 db = SQLAlchemy()
 migrate = Migrate()
 login_manager = LoginManager()
 login_manager.login_view = "coach.login"
+
+from .config import Config
+from .db_maintenance import ensure_database_schema
 
 def create_app(config_class: type[Config] | None = None) -> Flask:
     app = Flask(__name__, template_folder=str(Path(__file__).parent / "templates"))
@@ -40,7 +41,21 @@ def create_app(config_class: type[Config] | None = None) -> Flask:
 
     @login_manager.user_loader
     def load_user(user_id: str) -> Coach | None:
-        return Coach.query.get(int(user_id))
+        try:
+            role, raw_id = user_id.split(":", 1)
+            identity = int(raw_id)
+        except (ValueError, TypeError):
+            return None
+
+        user = db.session.get(Coach, identity)
+        if not user:
+            return None
+
+        if role == "admin" and not user.is_admin:
+            return None
+        if role not in {"coach", "admin"}:
+            return None
+        return user
 
     from .coach.routes import coach_bp
     from .api import api_bp
@@ -53,5 +68,8 @@ def create_app(config_class: type[Config] | None = None) -> Flask:
         from flask import redirect, url_for
 
         return redirect(url_for("coach.login"))
+
+    with app.app_context():
+        ensure_database_schema(db.engine, app.logger)
 
     return app

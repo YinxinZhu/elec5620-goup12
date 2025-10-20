@@ -5,7 +5,7 @@ from datetime import date, datetime, timedelta
 from functools import wraps
 from typing import Any
 
-from flask import Response, current_app, g, jsonify, request
+from flask import Response, abort, current_app, g, jsonify, request
 from .. import db
 from ..models import (
     ExamRule,
@@ -20,6 +20,8 @@ from ..models import (
     StudentExamAnswer,
     StudentExamSession,
     StudentLoginRateLimit,
+    VariantQuestion,
+    VariantQuestionGroup,
 )
 from ..services.progress import (
     ProgressAccessError,
@@ -33,11 +35,24 @@ from ..services.state_management import (
     get_questions_for_state,
     switch_student_state,
 )
+from ..services.variant_generation import (
+    derive_knowledge_point,
+    generate_question_variants,
+)
 from . import api_bp
 
 PHONE_REGEX = re.compile(r"^\+?\d{8,15}$")
 VALID_LANGUAGES = {"ENGLISH", "CHINESE"}
 VALID_OPTIONS = {"A", "B", "C", "D"}
+DEFAULT_VARIANT_COUNT = 3
+MAX_VARIANTS_PER_REQUEST = 5
+
+
+def _question_or_404(question_id: int) -> Question:
+    question = db.session.get(Question, question_id)
+    if not question:
+        abort(404)
+    return question
 
 
 def _json_error(message: str, status: int = 400):
@@ -222,6 +237,86 @@ def _finalise_session(session: StudentExamSession, *, auto: bool) -> None:
             entry.last_wrong_at = now
 
     db.session.commit()
+
+
+def _collect_student_answers(
+    student: Student, question_ids: set[int]
+) -> dict[int, dict[str, Any]]:
+    """Return the latest selected option for the given questions."""
+
+    if not question_ids:
+        return {}
+
+    latest: dict[int, dict[str, Any]] = {}
+
+    attempts = (
+        QuestionAttempt.query.filter(
+            QuestionAttempt.student_id == student.id,
+            QuestionAttempt.question_id.in_(question_ids),
+        )
+        .order_by(QuestionAttempt.attempted_at.desc())
+        .all()
+    )
+    for attempt in attempts:
+        info = latest.get(attempt.question_id)
+        if not info or attempt.attempted_at > info["recorded_at"]:
+            latest[attempt.question_id] = {
+                "option": attempt.chosen_option,
+                "recorded_at": attempt.attempted_at,
+            }
+
+    answers = (
+        StudentExamAnswer.query.join(StudentExamSession)
+        .filter(
+            StudentExamSession.student_id == student.id,
+            StudentExamAnswer.question_id.in_(question_ids),
+        )
+        .order_by(StudentExamAnswer.answered_at.desc())
+        .all()
+    )
+    for answer in answers:
+        recorded_at = (
+            answer.answered_at
+            or answer.session.finished_at
+            or answer.session.started_at
+            or datetime.min
+        )
+        info = latest.get(answer.question_id)
+        if not info or recorded_at > info["recorded_at"]:
+            latest[answer.question_id] = {
+                "option": answer.selected_option,
+                "recorded_at": recorded_at,
+            }
+
+    return latest
+
+
+def _serialise_variant_question(variant: VariantQuestion) -> dict[str, Any]:
+    return {
+        "id": variant.id,
+        "prompt": variant.prompt,
+        "options": {
+            "A": variant.option_a,
+            "B": variant.option_b,
+            "C": variant.option_c,
+            "D": variant.option_d,
+        },
+        "correctOption": variant.correct_option,
+        "explanation": variant.explanation,
+        "createdAt": variant.created_at.isoformat(),
+    }
+
+
+def _serialise_variant_group(group: VariantQuestionGroup) -> dict[str, Any]:
+    ordered = sorted(group.variants, key=lambda item: item.created_at)
+    return {
+        "groupId": group.id,
+        "baseQuestionId": group.base_question_id,
+        "knowledgePoint": group.knowledge_point_name,
+        "summary": group.knowledge_point_summary,
+        "createdAt": group.created_at.isoformat(),
+        "variants": [_serialise_variant_question(variant) for variant in ordered],
+    }
 
 
 @api_bp.post("/auth/register")
@@ -471,7 +566,7 @@ def list_questions():
 @_require_auth
 def get_question(question_id: int):
     student: Student = g.current_student
-    question = Question.query.get_or_404(question_id)
+    question = _question_or_404(question_id)
     if question.state_scope not in {"ALL", student.state}:
         return _json_error("Question not available for current state.", 403)
 
@@ -498,7 +593,7 @@ def get_question(question_id: int):
 @_require_auth
 def attempt_question(question_id: int):
     student: Student = g.current_student
-    question = Question.query.get_or_404(question_id)
+    question = _question_or_404(question_id)
     if question.state_scope not in {"ALL", student.state}:
         return _json_error("Question not available for current state.", 403)
 
@@ -557,7 +652,7 @@ def attempt_question(question_id: int):
 def star_question(question_id: int):
     student: Student = g.current_student
     action = (request.get_json(silent=True) or {}).get("action", "star")
-    question = Question.query.get_or_404(question_id)
+    question = _question_or_404(question_id)
     if question.state_scope not in {"ALL", student.state}:
         return _json_error("Question not available for current state.", 403)
 
@@ -576,6 +671,173 @@ def star_question(question_id: int):
         db.session.delete(entry)
         db.session.commit()
     return jsonify({"starred": False})
+
+
+@api_bp.post("/questions/<int:question_id>/variants")
+@_require_auth
+def generate_variants(question_id: int):
+    student: Student = g.current_student
+    question = _question_or_404(question_id)
+    if question.state_scope not in {"ALL", student.state}:
+        return _json_error("Question not available for current state.", 403)
+
+    data = request.get_json(silent=True) or {}
+    requested_count = data.get("count", DEFAULT_VARIANT_COUNT)
+    try:
+        count = int(requested_count)
+    except (TypeError, ValueError):
+        count = DEFAULT_VARIANT_COUNT
+
+    count = max(1, min(count, MAX_VARIANTS_PER_REQUEST))
+
+    variants = generate_question_variants(question, count=count)
+    knowledge_name, knowledge_summary = derive_knowledge_point(question)
+
+    group = VariantQuestionGroup(
+        student_id=student.id,
+        base_question_id=question.id,
+        knowledge_point_name=knowledge_name,
+        knowledge_point_summary=knowledge_summary,
+    )
+    db.session.add(group)
+    db.session.flush()
+
+    for draft in variants:
+        db.session.add(
+            VariantQuestion(
+                group_id=group.id,
+                student_id=student.id,
+                prompt=draft.prompt,
+                option_a=draft.option_a,
+                option_b=draft.option_b,
+                option_c=draft.option_c,
+                option_d=draft.option_d,
+                correct_option=draft.correct_option,
+                explanation=draft.explanation,
+            )
+        )
+
+    db.session.commit()
+    return jsonify({"group": _serialise_variant_group(group)}), 201
+
+
+@api_bp.get("/questions/variants")
+@_require_auth
+def list_variant_groups():
+    student: Student = g.current_student
+    groups = (
+        VariantQuestionGroup.query.filter_by(student_id=student.id)
+        .order_by(VariantQuestionGroup.created_at.desc())
+        .all()
+    )
+    return jsonify({"groups": [_serialise_variant_group(group) for group in groups]})
+
+
+@api_bp.get("/questions/variants/<int:group_id>")
+@_require_auth
+def get_variant_group(group_id: int):
+    student: Student = g.current_student
+    group = (
+        VariantQuestionGroup.query.filter_by(id=group_id, student_id=student.id)
+        .first_or_404()
+    )
+    return jsonify({"group": _serialise_variant_group(group)})
+
+
+@api_bp.delete("/questions/variants/<int:group_id>")
+@_require_auth
+def delete_variant_group(group_id: int):
+    student: Student = g.current_student
+    group = (
+        VariantQuestionGroup.query.filter_by(id=group_id, student_id=student.id)
+        .first_or_404()
+    )
+    db.session.delete(group)
+    db.session.commit()
+    return jsonify({"deleted": True})
+
+
+@api_bp.get("/notebook")
+@_require_auth
+def notebook_overview():
+    student: Student = g.current_student
+    state_filter = _normalise_state(request.args.get("state"))
+    wrong_query = NotebookEntry.query.filter_by(student_id=student.id)
+    if state_filter:
+        wrong_query = wrong_query.filter_by(state=state_filter)
+    wrong_entries = wrong_query.order_by(NotebookEntry.last_wrong_at.desc()).all()
+
+    starred_query = StarredQuestion.query.filter_by(student_id=student.id)
+    if state_filter:
+        starred_query = starred_query.join(StarredQuestion.question).filter(
+            (Question.state_scope == "ALL") | (Question.state_scope == state_filter)
+        )
+    starred_entries = starred_query.order_by(StarredQuestion.created_at.desc()).all()
+
+    question_ids = {entry.question_id for entry in wrong_entries}
+    star_ids = {entry.question_id for entry in starred_entries}
+    responses = _collect_student_answers(student, question_ids | star_ids)
+
+    starred_lookup = {entry.question_id: entry for entry in starred_entries}
+    wrong_payload = []
+    for entry in wrong_entries:
+        question = entry.question
+        answer = responses.get(question.id)
+        wrong_payload.append(
+            {
+                "questionId": question.id,
+                "qid": question.qid,
+                "prompt": question.prompt,
+                "topic": question.topic,
+                "state": entry.state,
+                "wrongCount": entry.wrong_count,
+                "lastWrongAt": entry.last_wrong_at.isoformat()
+                if entry.last_wrong_at
+                else None,
+                "studentAnswer": answer["option"] if answer else None,
+                "correctAnswer": question.correct_option,
+                "explanation": question.explanation,
+                "starred": question.id in starred_lookup,
+            }
+        )
+
+    starred_payload = []
+    for entry in starred_entries:
+        question = entry.question
+        answer = responses.get(question.id)
+        starred_payload.append(
+            {
+                "questionId": question.id,
+                "qid": question.qid,
+                "prompt": question.prompt,
+                "topic": question.topic,
+                "stateScope": question.state_scope,
+                "starredAt": entry.created_at.isoformat(),
+                "studentAnswer": answer["option"] if answer else None,
+                "correctAnswer": question.correct_option,
+                "explanation": question.explanation,
+            }
+        )
+
+    return jsonify({"wrong": wrong_payload, "starred": starred_payload})
+
+
+@api_bp.delete("/notebook/<int:question_id>")
+@_require_auth
+def delete_notebook_entry(question_id: int):
+    student: Student = g.current_student
+    state_filter = _normalise_state(request.args.get("state"))
+    query = NotebookEntry.query.filter_by(student_id=student.id, question_id=question_id)
+    if state_filter:
+        query = query.filter_by(state=state_filter)
+
+    entry = query.first()
+    if not entry:
+        return _json_error("Notebook entry not found.", 404)
+
+    db.session.delete(entry)
+    db.session.commit()
+    return jsonify({"removed": True})
 
 
 @api_bp.get("/progress")

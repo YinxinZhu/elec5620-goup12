@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
-{% block title %}My Students{% endblock %}
+{% block title %}{{ 'All Students' if current_user.is_admin else 'My Students' }}{% endblock %}
 {% block content %}
-<h1 class="h3 mb-4">My Students</h1>
+<h1 class="h3 mb-4">{{ 'All Students' if current_user.is_admin else 'My Students' }}</h1>
 {% if students %}
 <div class="table-responsive">
   <table class="table align-middle">
@@ -10,6 +10,9 @@
         <th>Name</th>
         <th>Email</th>
         <th>State</th>
+        {% if current_user.is_admin %}
+        <th>Assigned Coach</th>
+        {% endif %}
         <th>Mock exam attempts</th>
         <th>Last score</th>
       </tr>
@@ -20,6 +23,15 @@
         <td>{{ student.name }}</td>
         <td>{{ student.email }}</td>
         <td>{{ student.state }}</td>
+        {% if current_user.is_admin %}
+        <td>
+          {% if student.assigned_coach_id and coach_lookup.get(student.assigned_coach_id) %}
+            {{ coach_lookup[student.assigned_coach_id].name }}
+          {% else %}
+            <span class="text-muted">Unassigned</span>
+          {% endif %}
+        </td>
+        {% endif %}
         <td>{{ summaries[student.id].attempts }}</td>
         <td>
           {% if summaries[student.id].last_score is not none %}
@@ -34,6 +46,6 @@
   </table>
 </div>
 {% else %}
-<div class="alert alert-info">No students assigned yet.</div>
+<div class="alert alert-info">{{ 'No students found.' if current_user.is_admin else 'No students assigned yet.' }}</div>
 {% endif %}
 {% endblock %}

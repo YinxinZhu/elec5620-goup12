@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 
 from app import create_app, db
 from app.models import (
+    Admin,
     Appointment,
     AvailabilitySlot,
     Coach,
@@ -42,6 +43,17 @@ def seed_demo() -> None:
     )
     coach.set_password("password123")
 
+    admin_coach = Coach(
+        email="admin@example.com",
+        name="Platform Administrator",
+        phone="0400 999 000",
+        city="Sydney",
+        state="NSW",
+        vehicle_types="AT,MT",
+        bio="Platform superuser with access to all coach and student features.",
+    )
+    admin_coach.set_password("password123")
+
     students = [
         Student(
             name="Jamie Lee",
@@ -59,6 +71,14 @@ def seed_demo() -> None:
             preferred_language="ENGLISH",
             coach=coach,
         ),
+        Student(
+            name="Morgan Patel",
+            email="morgan@example.com",
+            state="QLD",
+            mobile_number="0400000102",
+            preferred_language="ENGLISH",
+            coach=admin_coach,
+        ),
     ]
     for student in students:
         student.set_password("password123")
@@ -69,49 +89,58 @@ def seed_demo() -> None:
         MockExamSummary(student=students[1], state="NSW", score=75),
     ]
 
+    STATE_EXAM_CONFIG: dict[str, dict[str, int]] = {
+        "NSW": {"questions": 45, "pass_mark": 38, "time_limit": 45, "papers": 2, "bank": 120},
+        "VIC": {"questions": 42, "pass_mark": 36, "time_limit": 40, "papers": 1, "bank": 60},
+        "QLD": {"questions": 45, "pass_mark": 38, "time_limit": 45, "papers": 1, "bank": 60},
+        "SA": {"questions": 40, "pass_mark": 34, "time_limit": 40, "papers": 1, "bank": 60},
+    }
+
     exam_rules = [
-        ExamRule(state="NSW", total_questions=45, pass_mark=38, time_limit_minutes=45),
-        ExamRule(state="VIC", total_questions=42, pass_mark=36, time_limit_minutes=40),
+        ExamRule(
+            state=state,
+            total_questions=config["questions"],
+            pass_mark=config["pass_mark"],
+            time_limit_minutes=config["time_limit"],
+        )
+        for state, config in STATE_EXAM_CONFIG.items()
     ]
 
-    questions = [
-        Question(
-            qid="NSW-001",
-            prompt="What is the speed limit in school zones?",
-            state_scope="NSW",
-            topic="rules",
-            option_a="25 km/h",
-            option_b="30 km/h",
-            option_c="40 km/h",
-            option_d="50 km/h",
-            correct_option="C",
-            explanation="School zones in NSW require a 40 km/h limit.",
-        ),
-        Question(
-            qid="CORE-001",
-            prompt="Define a safe following distance.",
-            state_scope="ALL",
-            topic="safety",
-            option_a="One second",
-            option_b="Two seconds",
-            option_c="Four seconds",
-            option_d="None",
-            correct_option="B",
-            explanation="Use the two-second rule in good conditions.",
-        ),
-        Question(
-            qid="VIC-001",
-            prompt="When must headlights be used?",
-            state_scope="VIC",
-            topic="rules",
-            option_a="At night only",
-            option_b="When visibility is low",
-            option_c="Only on freeways",
-            option_d="Never",
-            correct_option="B",
-            explanation="Headlights are required when visibility is reduced.",
-        ),
-    ]
+    LETTERS = ("A", "B", "C", "D")
+    OPTION_SNIPPETS = (
+        "Slow down smoothly to create extra space.",
+        "Check mirrors and blind spots before acting.",
+        "Signal intentions clearly for surrounding traffic.",
+        "Maintain a generous following gap to stay safe.",
+    )
+    TOPICS = ("Road Rules", "Hazard Perception", "Safe Driving", "Vehicle Control", "Road Signs")
+
+    questions: list[Question] = []
+    questions_by_state: dict[str, list[Question]] = {}
+    for state, config in STATE_EXAM_CONFIG.items():
+        for index in range(1, config["bank"] + 1):
+            topic = TOPICS[(index - 1) % len(TOPICS)]
+            option_map = {
+                letter: f"{snippet} (scenario {index} in {state})."
+                for letter, snippet in zip(LETTERS, OPTION_SNIPPETS)
+            }
+            correct_letter = LETTERS[(index - 1) % len(LETTERS)]
+            question = Question(
+                qid=f"{state}-{index:03d}",
+                prompt=f"{state} practice scenario {index}: {topic} decision.",
+                state_scope=state,
+                topic=topic.lower(),
+                option_a=option_map["A"],
+                option_b=option_map["B"],
+                option_c=option_map["C"],
+                option_d=option_map["D"],
+                correct_option=correct_letter,
+                explanation=(
+                    f"{option_map[correct_letter]} This reinforces {topic.lower()} awareness."
+                ),
+            )
+            questions.append(question)
+            questions_by_state.setdefault(state, []).append(question)
 
     now = datetime.utcnow()
     slots = [
@@ -127,37 +156,65 @@ def seed_demo() -> None:
             duration_minutes=30,
             location_text="Parramatta Station",
         ),
+        AvailabilitySlot(
+            coach=admin_coach,
+            start_time=now + timedelta(days=3, hours=1),
+            duration_minutes=60,
+            location_text="Online video session",
+        ),
     ]
 
     booking = Appointment(slot=slots[0], student=students[0])
     slots[0].status = "booked"
 
     db.session.add(coach)
+    db.session.add(admin_coach)
     db.session.add_all(students)
     db.session.add_all(summaries)
     db.session.add_all(exam_rules)
     db.session.add_all(questions)
     db.session.flush()
 
-    paper_nsw = MockExamPaper(state="NSW", title="NSW Paper A", time_limit_minutes=45)
-    paper_nsw_b = MockExamPaper(state="NSW", title="NSW Paper B", time_limit_minutes=45)
-    paper_vic = MockExamPaper(state="VIC", title="VIC Paper A", time_limit_minutes=40)
-    db.session.add_all([paper_nsw, paper_nsw_b, paper_vic])
+    papers: list[MockExamPaper] = []
+    paper_registry: dict[str, list[MockExamPaper]] = {}
+    for state, config in STATE_EXAM_CONFIG.items():
+        for paper_index in range(config["papers"]):
+            suffix = chr(ord("A") + paper_index)
+            paper = MockExamPaper(
+                state=state,
+                title=f"{state} Paper {suffix}",
+                time_limit_minutes=config["time_limit"],
+            )
+            papers.append(paper)
+            paper_registry.setdefault(state, []).append(paper)
+    db.session.add_all(papers)
     db.session.flush()
 
-    question_lookup = {question.qid: question for question in questions}
+    paper_questions: list[MockExamPaperQuestion] = []
+    for state, paper_list in paper_registry.items():
+        state_questions = questions_by_state[state]
+        config = STATE_EXAM_CONFIG[state]
+        per_paper = config["questions"]
+        for paper_index, paper in enumerate(paper_list):
+            start = paper_index * per_paper
+            subset = state_questions[start : start + per_paper]
+            for position, question in enumerate(subset, start=1):
+                paper_questions.append(
+                    MockExamPaperQuestion(
+                        paper_id=paper.id,
+                        question_id=question.id,
+                        position=position,
+                    )
+                )
 
-    db.session.add_all(
-        [
-            MockExamPaperQuestion(paper_id=paper_nsw.id, question_id=question_lookup["NSW-001"].id, position=1),
-            MockExamPaperQuestion(paper_id=paper_nsw.id, question_id=question_lookup["CORE-001"].id, position=2),
-            MockExamPaperQuestion(paper_id=paper_nsw_b.id, question_id=question_lookup["NSW-001"].id, position=1),
-            MockExamPaperQuestion(paper_id=paper_nsw_b.id, question_id=question_lookup["CORE-001"].id, position=2),
-            MockExamPaperQuestion(paper_id=paper_vic.id, question_id=question_lookup["CORE-001"].id, position=1),
-            MockExamPaperQuestion(paper_id=paper_vic.id, question_id=question_lookup["VIC-001"].id, position=2),
-        ]
-    )
+    db.session.add_all(paper_questions)
     db.session.add_all(slots)
+    db.session.flush()
+
+    admin_entry = Admin(id=admin_coach.id)
+    db.session.add(admin_entry)
     db.session.add(booking)
     db.session.commit()
-    app.logger.info("Demo data created: coach login coach@example.com / password123")
+    app.logger.info(
+        "Demo data created: coach login coach@example.com / password123; admin login admin@example.com / password123"
+    )
