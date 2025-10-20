@@ -77,15 +77,17 @@ def switch_student_state(
 
     rule = _get_rule_or_error(desired_state)
 
+    progress = StudentStateProgress.query.filter_by(
+        student_id=student.id, state=desired_state
+    ).first()
+    if not progress:
+        progress = StudentStateProgress(student_id=student.id, state=desired_state)
+        db.session.add(progress)
+
+    progress.last_active_at = datetime.utcnow()
+
     if desired_state != student.state:
         student.state = desired_state
-        progress = StudentStateProgress.query.filter_by(
-            student_id=student.id, state=desired_state
-        ).first()
-        if not progress:
-            progress = StudentStateProgress(student_id=student.id, state=desired_state)
-            db.session.add(progress)
-        progress.last_active_at = datetime.utcnow()
 
     db.session.commit()
     return _format_rule_summary(desired_state, rule)

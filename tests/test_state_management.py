@@ -20,6 +20,7 @@ from app.models import (
     QuestionAttempt,
     Student,
     StudentExamSession,
+    StudentStateProgress,
 )
 from app.services import (
     ProgressAccessError,
@@ -193,6 +194,32 @@ def test_switching_state_updates_preferences_and_progress(sample_data):
     assert len(coaches) == 1
     assert coaches[0].state == "VIC"
 
+
+def test_switching_same_state_initialises_and_refreshes_progress(sample_data):
+    student = sample_data
+
+    assert (
+        StudentStateProgress.query.filter_by(student_id=student.id, state="NSW").first()
+        is None
+    )
+
+    switch_student_state(student, "NSW", acting_student=student)
+
+    progress = StudentStateProgress.query.filter_by(
+        student_id=student.id, state="NSW"
+    ).one()
+    initial_last_active = progress.last_active_at
+
+    progress.last_active_at = initial_last_active - timedelta(minutes=10)
+    db.session.commit()
+
+    switch_student_state(student, "NSW", acting_student=student)
+
+    refreshed = StudentStateProgress.query.filter_by(
+        student_id=student.id, state="NSW"
+    ).one()
+
+    assert refreshed.last_active_at >= initial_last_active
 
 def test_switching_blocked_with_active_exam(sample_data):
     student = sample_data
