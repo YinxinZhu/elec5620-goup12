@@ -166,7 +166,7 @@ def slots():
             except (TypeError, ValueError):
                 flash("Please choose a coach for the new slot.", "warning")
                 return redirect(url_for("coach.slots"))
-            if not Coach.query.get(selected_coach_id):
+            if not db.session.get(Coach, selected_coach_id):
                 flash("Selected coach could not be found.", "danger")
                 return redirect(url_for("coach.slots"))
         else:
@@ -358,7 +358,7 @@ def _handle_account_creation() -> None:
     assigned_coach = None
     if assigned_coach_raw:
         try:
-            assigned_coach = Coach.query.get(int(assigned_coach_raw))
+            assigned_coach = db.session.get(Coach, int(assigned_coach_raw))
         except (TypeError, ValueError):
             assigned_coach = None
 
@@ -408,13 +408,13 @@ def _handle_password_update() -> None:
         return
 
     if account_type == "student":
-        entity = Student.query.get(identity)
+        entity = db.session.get(Student, identity)
         if not entity:
             flash("Student account not found.", "danger")
             return
         entity.set_password(new_password)
     else:
-        coach = Coach.query.get(identity)
+        coach = db.session.get(Coach, identity)
         if not coach:
             flash("Coach account not found.", "danger")
             return

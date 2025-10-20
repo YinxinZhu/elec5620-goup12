@@ -47,7 +47,7 @@ def create_app(config_class: type[Config] | None = None) -> Flask:
         except (ValueError, TypeError):
             return None
 
-        user = Coach.query.get(identity)
+        user = db.session.get(Coach, identity)
         if not user:
             return None
 
