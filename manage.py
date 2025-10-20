@@ -3,7 +3,15 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 
 from app import create_app, db
-from app.models import Appointment, AvailabilitySlot, Coach, MockExamSummary, Student
+from app.models import (
+    Appointment,
+    AvailabilitySlot,
+    Coach,
+    ExamRule,
+    MockExamSummary,
+    Question,
+    Student,
+)
 
 app = create_app()
 
@@ -38,9 +46,20 @@ def seed_demo() -> None:
     ]
 
     summaries = [
-        MockExamSummary(student=students[0], score=88),
-        MockExamSummary(student=students[0], score=92),
-        MockExamSummary(student=students[1], score=75),
+        MockExamSummary(student=students[0], state="NSW", score=88),
+        MockExamSummary(student=students[0], state="NSW", score=92),
+        MockExamSummary(student=students[1], state="NSW", score=75),
+    ]
+
+    exam_rules = [
+        ExamRule(state="NSW", total_questions=45, pass_mark=38, time_limit_minutes=45),
+        ExamRule(state="VIC", total_questions=42, pass_mark=36, time_limit_minutes=40),
+    ]
+
+    questions = [
+        Question(qid="NSW-001", prompt="What is the speed limit in school zones?", state_scope="NSW"),
+        Question(qid="CORE-001", prompt="Define a safe following distance.", state_scope="ALL"),
+        Question(qid="VIC-001", prompt="When must headlights be used?", state_scope="VIC"),
     ]
 
     now = datetime.utcnow()
@@ -65,6 +84,8 @@ def seed_demo() -> None:
     db.session.add(coach)
     db.session.add_all(students)
     db.session.add_all(summaries)
+    db.session.add_all(exam_rules)
+    db.session.add_all(questions)
     db.session.add_all(slots)
     db.session.add(booking)
     db.session.commit()
