@@ -17,7 +17,15 @@
   </div>
   <div class="col-md-6">
     <label class="form-label" for="state">State</label>
-    <input class="form-control" id="state" name="state" value="{{ current_user.state }}" maxlength="10" required>
+    <select class="form-select" id="state" name="state" required>
+      <option value="">Choose…</option>
+      {% for state in state_choices %}
+      <option value="{{ state }}" {% if current_user.state == state %}selected{% endif %}>{{ state }}</option>
+      {% endfor %}
+      {% if current_user.state and current_user.state not in state_choices %}
+      <option value="{{ current_user.state }}" selected>{{ current_user.state }}</option>
+      {% endif %}
+    </select>
   </div>
   <div class="col-12">
     <span class="form-label d-block">Vehicle types</span>

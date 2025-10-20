@@ -11,9 +11,11 @@ from app.models import (
     MockExamSummary,
     NotebookEntry,
     Question,
+    StarredQuestion,
     Student,
     StudentExamSession,
     StudentStateProgress,
+    VariantQuestionGroup,
 )
 
 
@@ -218,12 +220,18 @@ def test_question_and_progress_flow(seeded_app, client):
     assert len(list_resp["questions"]) >= 3
     first_question = list_resp["questions"][0]
 
+    with seeded_app.app_context():
+        db_question = db.session.get(Question, first_question["id"])
+        assert db_question is not None
+        wrong_option = next(option for option in ["A", "B", "C", "D"] if option != db_question.correct_option)
+
     attempt = client.post(
         f"/api/questions/{first_question['id']}/attempt",
         headers=_auth_headers(token),
-        json={"chosenOption": "B", "timeSpentSeconds": 25},
+        json={"chosenOption": wrong_option, "timeSpentSeconds": 25},
     ).get_json()
     assert set(attempt.keys()) == {"correct", "correctOption", "explanation"}
+    assert attempt["correct"] is False
 
     client.post(
         f"/api/questions/{first_question['id']}/star",
@@ -233,12 +241,30 @@ def test_question_and_progress_flow(seeded_app, client):
     starred_list = client.get("/api/questions", headers=_auth_headers(token)).get_json()
     assert any(q["starred"] for q in starred_list["questions"])  # starred flag present
 
+    notebook = client.get("/api/notebook", headers=_auth_headers(token)).get_json()
+    assert any(item["questionId"] == first_question["id"] for item in notebook["starred"])
+    wrong_entry = next(item for item in notebook["wrong"] if item["questionId"] == first_question["id"])
+    assert wrong_entry["studentAnswer"] == wrong_option
+    assert wrong_entry["correctAnswer"] != wrong_option
+
+    delete_resp = client.delete(
+        f"/api/notebook/{first_question['id']}", headers=_auth_headers(token)
+    )
+    assert delete_resp.status_code == 200
+    notebook_after = client.get("/api/notebook", headers=_auth_headers(token)).get_json()
+    assert all(item["questionId"] != first_question["id"] for item in notebook_after["wrong"])
+
     progress = client.get("/api/progress", headers=_auth_headers(token)).get_json()
     assert progress["total"] >= 3
 
     export_resp = client.get("/api/progress/export", headers=_auth_headers(token))
     assert export_resp.status_code == 200
     assert export_resp.mimetype == "text/csv"
+
+    with seeded_app.app_context():
+        student = Student.query.filter_by(mobile_number="0410000003").one()
+        assert NotebookEntry.query.filter_by(student_id=student.id).count() == 0
+        assert StarredQuestion.query.filter_by(student_id=student.id).count() == 1
 
 
 def test_mock_exam_flow(seeded_app, client):
@@ -287,5 +313,52 @@ def test_mock_exam_flow(seeded_app, client):
         student = Student.query.filter_by(mobile_number="0410000004").one()
         assert MockExamSummary.query.filter_by(student_id=student.id).count() == 1
         assert NotebookEntry.query.filter_by(student_id=student.id, state="NSW").count() >= 1
-        session_record = StudentExamSession.query.get(session_id)
+        session_record = db.session.get(StudentExamSession, session_id)
         assert session_record.finished_at is not None
+
+
+def test_variant_generation_flow(seeded_app, client):
+    token = client.post(
+        "/api/auth/register",
+        json={
+            "mobileNumber": "0410000005",
+            "password": "password123",
+            "nickname": "Taylor",
+            "state": "NSW",
+            "preferredLanguage": "ENGLISH",
+        },
+    ).get_json()["token"]
+
+    first_question = client.get("/api/questions", headers=_auth_headers(token)).get_json()["questions"][0]
+    create_resp = client.post(
+        f"/api/questions/{first_question['id']}/variants",
+        headers=_auth_headers(token),
+        json={"count": 2},
+    )
+    assert create_resp.status_code == 201
+    group_payload = create_resp.get_json()["group"]
+    assert len(group_payload["variants"]) == 2
+
+    groups_list = client.get(
+        "/api/questions/variants", headers=_auth_headers(token)
+    ).get_json()["groups"]
+    assert any(group["groupId"] == group_payload["groupId"] for group in groups_list)
+
+    detail = client.get(
+        f"/api/questions/variants/{group_payload['groupId']}",
+        headers=_auth_headers(token),
+    ).get_json()["group"]
+    assert detail["groupId"] == group_payload["groupId"]
+
+    delete_resp = client.delete(
+        f"/api/questions/variants/{group_payload['groupId']}",
+        headers=_auth_headers(token),
+    )
+    assert delete_resp.status_code == 200
+    groups_after = client.get(
+        "/api/questions/variants", headers=_auth_headers(token)
+    ).get_json()["groups"]
+    assert groups_after == []
+
+    with seeded_app.app_context():
+        assert VariantQuestionGroup.query.count() == 0
