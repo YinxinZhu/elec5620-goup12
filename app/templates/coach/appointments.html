@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
-{% block title %}Appointments{% endblock %}
+{% block title %}{{ 'All Appointments' if current_user.is_admin else 'Appointments' }}{% endblock %}
 {% block content %}
-<h1 class="h3 mb-4">Appointments</h1>
+<h1 class="h3 mb-4">{{ 'All Appointments' if current_user.is_admin else 'Appointments' }}</h1>
 {% if appointments %}
 <div class="table-responsive">
   <table class="table align-middle">
@@ -11,6 +11,9 @@
         <th>Duration</th>
         <th>Location</th>
         <th>Student</th>
+        {% if current_user.is_admin %}
+        <th>Coach</th>
+        {% endif %}
         <th>Status</th>
         <th>Actions</th>
       </tr>
@@ -22,6 +25,12 @@
         <td>{{ appointment.slot.duration_minutes }} min</td>
         <td>{{ appointment.slot.location_text }}</td>
         <td>{{ appointment.student.name }} ({{ appointment.student.email }})</td>
+        {% if current_user.is_admin %}
+        <td>
+          {% set coach = coach_lookup.get(appointment.slot.coach_id) %}
+          {{ coach.name if coach else 'Unknown' }}
+        </td>
+        {% endif %}
         <td>
           <span class="badge bg-{{ 'success' if appointment.status == 'booked' else 'secondary' if appointment.status == 'completed' else 'danger' }}">{{ appointment.status|capitalize }}</span>
         </td>
@@ -41,6 +50,6 @@
   </table>
 </div>
 {% else %}
-<div class="alert alert-info">No appointments yet.</div>
+<div class="alert alert-info">{{ 'No appointments scheduled.' if current_user.is_admin else 'No appointments yet.' }}</div>
 {% endif %}
 {% endblock %}
