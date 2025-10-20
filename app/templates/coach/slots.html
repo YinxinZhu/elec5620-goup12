@@ -23,7 +23,7 @@
         <select class="form-select" id="coach_id" name="coach_id" required>
           <option value="" disabled selected>Select a coach</option>
           {% for coach in coach_choices %}
-          <option value="{{ coach.id }}">{{ coach.name }} ({{ coach.email }})</option>
+          <option value="{{ coach.id }}">{{ coach.name }} ({{ coach.mobile_number }})</option>
           {% endfor %}
         </select>
       </div>
