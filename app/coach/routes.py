@@ -12,7 +12,6 @@ from flask import (
     url_for,
 )
 from flask_login import current_user, login_required, login_user, logout_user
-from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from urllib.parse import urljoin, urlparse
 
@@ -58,9 +57,9 @@ def _is_safe_redirect_target(target: str | None) -> bool:
 @coach_bp.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
-        email = request.form.get("email", "").strip().lower()
+        mobile_number = (request.form.get("mobile_number") or "").strip()
         password = request.form.get("password", "")
-        coach = Coach.query.filter(func.lower(Coach.email) == email).first()
+        coach = Coach.query.filter(Coach.mobile_number == mobile_number).first()
         if coach and coach.check_password(password):
             login_user(coach)
             flash("Welcome back!", "success")
@@ -68,7 +67,7 @@ def login():
             if not _is_safe_redirect_target(next_url):
                 next_url = None
             return redirect(next_url or url_for("coach.dashboard"))
-        flash("Invalid email or password", "danger")
+        flash("Invalid mobile number or password", "danger")
     return render_template("coach/login.html")
 
 
@@ -120,7 +119,11 @@ def dashboard():
 def profile():
     if request.method == "POST":
         current_user.name = request.form.get("name", current_user.name)
-        current_user.phone = request.form.get("phone", current_user.phone)
+        submitted_mobile = (request.form.get("mobile_number") or "").strip()
+        if not submitted_mobile:
+            flash("Mobile number is required.", "warning")
+            return render_template("coach/profile.html", state_choices=STATE_CHOICES)
+        current_user.mobile_number = submitted_mobile
         current_user.city = request.form.get("city", current_user.city)
         state_choice = (request.form.get("state") or "").strip().upper()
         if state_choice not in STATE_CHOICES:
@@ -324,7 +327,7 @@ def _handle_account_creation() -> None:
         name = (request.form.get("name") or "").strip()
         email = (request.form.get("email") or "").strip().lower()
         password = request.form.get("password") or ""
-        phone = (request.form.get("phone") or "").strip()
+        mobile_number = (request.form.get("mobile_number") or "").strip()
         city = (request.form.get("city") or "").strip()
         state = (request.form.get("state") or "").strip().upper()
         if state not in STATE_CHOICES:
@@ -332,14 +335,19 @@ def _handle_account_creation() -> None:
             return
         vehicle_types = _parse_vehicle_types(request.form.getlist("vehicle_types"))
 
-        if not all([name, email, password, phone, city, state, vehicle_types]):
-            flash("All coach/admin fields are required, including vehicle types.", "warning")
+        if not all(
+            [name, email, password, mobile_number, city, state, vehicle_types]
+        ):
+            flash(
+                "All coach/admin fields are required, including a mobile number.",
+                "warning",
+            )
             return
 
         coach = Coach(
             name=name,
             email=email,
-            phone=phone,
+            mobile_number=mobile_number,
             city=city,
             state=state,
             vehicle_types=vehicle_types,
@@ -351,7 +359,10 @@ def _handle_account_creation() -> None:
             db.session.flush()
         except IntegrityError:
             db.session.rollback()
-            flash("Email already exists for another coach account.", "danger")
+            flash(
+                "Unable to create account: duplicate email or mobile number.",
+                "danger",
+            )
             return
 
         if role == "admin":
