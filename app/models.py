@@ -122,6 +122,12 @@ class Student(db.Model):
     login_windows = db.relationship(
         "StudentLoginRateLimit", back_populates="student", cascade="all, delete-orphan"
     )
+    variant_groups = db.relationship(
+        "VariantQuestionGroup", back_populates="student", cascade="all, delete-orphan"
+    )
+    variant_questions = db.relationship(
+        "VariantQuestion", back_populates="student", cascade="all, delete-orphan"
+    )
 
     def set_password(self, password: str) -> None:
         self.password_hash = generate_password_hash(password)
@@ -296,6 +302,44 @@ class StarredQuestion(db.Model):
     __table_args__ = (
         UniqueConstraint("student_id", "question_id", name="uq_starred_student_question"),
     )
+
+
+class VariantQuestionGroup(db.Model):
+    __tablename__ = "variant_question_groups"
+
+    id = db.Column(db.Integer, primary_key=True)
+    student_id = db.Column(db.Integer, db.ForeignKey("students.id"), nullable=False)
+    base_question_id = db.Column(db.Integer, db.ForeignKey("questions.id"), nullable=False)
+    knowledge_point_name = db.Column(db.String(255), nullable=False)
+    knowledge_point_summary = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    student = db.relationship("Student", back_populates="variant_groups")
+    base_question = db.relationship("Question")
+    variants = db.relationship(
+        "VariantQuestion", back_populates="group", cascade="all, delete-orphan"
+    )
+
+
+class VariantQuestion(db.Model):
+    __tablename__ = "variant_questions"
+
+    id = db.Column(db.Integer, primary_key=True)
+    group_id = db.Column(
+        db.Integer, db.ForeignKey("variant_question_groups.id"), nullable=False
+    )
+    student_id = db.Column(db.Integer, db.ForeignKey("students.id"), nullable=False)
+    prompt = db.Column(db.Text, nullable=False)
+    option_a = db.Column(db.String(255), nullable=False)
+    option_b = db.Column(db.String(255), nullable=False)
+    option_c = db.Column(db.String(255), nullable=False)
+    option_d = db.Column(db.String(255), nullable=False)
+    correct_option = db.Column(db.String(1), nullable=False)
+    explanation = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    group = db.relationship("VariantQuestionGroup", back_populates="variants")
+    student = db.relationship("Student", back_populates="variant_questions")
 
 
 class MockExamPaper(db.Model):

@@ -16,7 +16,7 @@ MOBILE_PADDING = 4
 
 DEFAULT_ADMIN_EMAIL = "admin@example.com"
 DEFAULT_ADMIN_PASSWORD = "password123"
-DEFAULT_ADMIN_NAME = "DriveWise Administrator"
+DEFAULT_ADMIN_NAME = "Platform Administrator"
 DEFAULT_ADMIN_PHONE = "0400 999 000"
 DEFAULT_ADMIN_CITY = "Sydney"
 DEFAULT_ADMIN_STATE = "NSW"
@@ -150,8 +150,30 @@ def ensure_admin_support(engine: Engine, logger: logging.Logger | None = None) -
         raise
 
 
+def ensure_variant_support(engine: Engine, logger: logging.Logger | None = None) -> None:
+    """Create variant question tables for upgraded deployments."""
+
+    inspector = inspect(engine)
+    tables = set(inspector.get_table_names())
+    required = {"variant_question_groups", "variant_questions"}
+    if required.issubset(tables):
+        return
+
+    logger = logger or logging.getLogger(__name__)
+
+    from .models import VariantQuestion, VariantQuestionGroup
+
+    try:
+        VariantQuestionGroup.__table__.create(bind=engine, checkfirst=True)
+        VariantQuestion.__table__.create(bind=engine, checkfirst=True)
+    except SQLAlchemyError:
+        logger.exception("Failed to create variant question tables during maintenance")
+        raise
+
+
 def ensure_database_schema(engine: Engine, logger: logging.Logger | None = None) -> None:
     """Run all lightweight schema checks for legacy compatibility."""
 
     ensure_student_mobile_column(engine, logger)
     ensure_admin_support(engine, logger)
+    ensure_variant_support(engine, logger)
