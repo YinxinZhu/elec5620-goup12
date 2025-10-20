@@ -10,7 +10,12 @@ from sqlalchemy.exc import IntegrityError
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from app.db_maintenance import ensure_student_mobile_column
+from app.db_maintenance import (
+    DEFAULT_ADMIN_EMAIL,
+    ensure_admin_support,
+    ensure_student_mobile_column,
+)
+from app.models import Coach
 
 
 @pytest.fixture()
@@ -27,6 +32,13 @@ def legacy_engine():
         )
         conn.execute(text("INSERT INTO students (name) VALUES ('Jamie')"))
         conn.execute(text("INSERT INTO students (name) VALUES ('Priya')"))
+    return engine
+
+
+@pytest.fixture()
+def coach_engine():
+    engine = create_engine("sqlite://")
+    Coach.__table__.create(bind=engine)
     return engine
 
 
@@ -71,3 +83,45 @@ def test_ensure_student_mobile_column_is_idempotent(legacy_engine):
         row_count = conn.execute(text("SELECT COUNT(*) FROM students")).scalar_one()
 
     assert row_count == 2
+
+
+def test_ensure_admin_support_creates_table_and_account(coach_engine):
+    logger = logging.getLogger("test_ensure_admin_support_creates_table_and_account")
+
+    ensure_admin_support(coach_engine, logger)
+
+    inspector = inspect(coach_engine)
+    tables = set(inspector.get_table_names())
+    assert "admins" in tables
+
+    with coach_engine.begin() as conn:
+        admin_rows = conn.execute(text("SELECT id FROM admins"))
+        rows = admin_rows.fetchall()
+    assert len(rows) == 1
+
+    admin_id = rows[0].id
+    with coach_engine.begin() as conn:
+        coach_row = conn.execute(
+            text("SELECT email, password_hash FROM coaches WHERE id = :id"),
+            {"id": admin_id},
+        ).one()
+
+    assert coach_row.email == DEFAULT_ADMIN_EMAIL
+    assert coach_row.password_hash and coach_row.password_hash != "password123"
+
+
+def test_ensure_admin_support_is_idempotent(coach_engine):
+    logger = logging.getLogger("test_ensure_admin_support_is_idempotent")
+
+    ensure_admin_support(coach_engine, logger)
+    ensure_admin_support(coach_engine, logger)
+
+    with coach_engine.begin() as conn:
+        admin_count = conn.execute(text("SELECT COUNT(*) FROM admins")).scalar_one()
+        coach_count = conn.execute(
+            text("SELECT COUNT(*) FROM coaches WHERE email = :email"),
+            {"email": DEFAULT_ADMIN_EMAIL},
+        ).scalar_one()
+
+    assert admin_count == 1
+    assert coach_count == 1
