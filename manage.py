@@ -8,6 +8,8 @@ from app.models import (
     AvailabilitySlot,
     Coach,
     ExamRule,
+    MockExamPaper,
+    MockExamPaperQuestion,
     MockExamSummary,
     Question,
     Student,
@@ -41,9 +43,25 @@ def seed_demo() -> None:
     coach.set_password("password123")
 
     students = [
-        Student(name="Jamie Lee", email="jamie@example.com", state="NSW", coach=coach),
-        Student(name="Priya Nair", email="priya@example.com", state="NSW", coach=coach),
+        Student(
+            name="Jamie Lee",
+            email="jamie@example.com",
+            state="NSW",
+            mobile_number="0400000100",
+            preferred_language="ENGLISH",
+            coach=coach,
+        ),
+        Student(
+            name="Priya Nair",
+            email="priya@example.com",
+            state="NSW",
+            mobile_number="0400000101",
+            preferred_language="ENGLISH",
+            coach=coach,
+        ),
     ]
+    for student in students:
+        student.set_password("password123")
 
     summaries = [
         MockExamSummary(student=students[0], state="NSW", score=88),
@@ -57,9 +75,42 @@ def seed_demo() -> None:
     ]
 
     questions = [
-        Question(qid="NSW-001", prompt="What is the speed limit in school zones?", state_scope="NSW"),
-        Question(qid="CORE-001", prompt="Define a safe following distance.", state_scope="ALL"),
-        Question(qid="VIC-001", prompt="When must headlights be used?", state_scope="VIC"),
+        Question(
+            qid="NSW-001",
+            prompt="What is the speed limit in school zones?",
+            state_scope="NSW",
+            topic="rules",
+            option_a="25 km/h",
+            option_b="30 km/h",
+            option_c="40 km/h",
+            option_d="50 km/h",
+            correct_option="C",
+            explanation="School zones in NSW require a 40 km/h limit.",
+        ),
+        Question(
+            qid="CORE-001",
+            prompt="Define a safe following distance.",
+            state_scope="ALL",
+            topic="safety",
+            option_a="One second",
+            option_b="Two seconds",
+            option_c="Four seconds",
+            option_d="None",
+            correct_option="B",
+            explanation="Use the two-second rule in good conditions.",
+        ),
+        Question(
+            qid="VIC-001",
+            prompt="When must headlights be used?",
+            state_scope="VIC",
+            topic="rules",
+            option_a="At night only",
+            option_b="When visibility is low",
+            option_c="Only on freeways",
+            option_d="Never",
+            correct_option="B",
+            explanation="Headlights are required when visibility is reduced.",
+        ),
     ]
 
     now = datetime.utcnow()
@@ -86,6 +137,26 @@ def seed_demo() -> None:
     db.session.add_all(summaries)
     db.session.add_all(exam_rules)
     db.session.add_all(questions)
+    db.session.flush()
+
+    paper_nsw = MockExamPaper(state="NSW", title="NSW Paper A", time_limit_minutes=45)
+    paper_nsw_b = MockExamPaper(state="NSW", title="NSW Paper B", time_limit_minutes=45)
+    paper_vic = MockExamPaper(state="VIC", title="VIC Paper A", time_limit_minutes=40)
+    db.session.add_all([paper_nsw, paper_nsw_b, paper_vic])
+    db.session.flush()
+
+    question_lookup = {question.qid: question for question in questions}
+
+    db.session.add_all(
+        [
+            MockExamPaperQuestion(paper_id=paper_nsw.id, question_id=question_lookup["NSW-001"].id, position=1),
+            MockExamPaperQuestion(paper_id=paper_nsw.id, question_id=question_lookup["CORE-001"].id, position=2),
+            MockExamPaperQuestion(paper_id=paper_nsw_b.id, question_id=question_lookup["NSW-001"].id, position=1),
+            MockExamPaperQuestion(paper_id=paper_nsw_b.id, question_id=question_lookup["CORE-001"].id, position=2),
+            MockExamPaperQuestion(paper_id=paper_vic.id, question_id=question_lookup["CORE-001"].id, position=1),
+            MockExamPaperQuestion(paper_id=paper_vic.id, question_id=question_lookup["VIC-001"].id, position=2),
+        ]
+    )
     db.session.add_all(slots)
     db.session.add(booking)
     db.session.commit()

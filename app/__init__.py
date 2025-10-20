@@ -43,7 +43,10 @@ def create_app(config_class: type[Config] | None = None) -> Flask:
         return Coach.query.get(int(user_id))
 
     from .coach.routes import coach_bp
+    from .api import api_bp
+
     app.register_blueprint(coach_bp)
+    app.register_blueprint(api_bp)
 
     @app.route("/")
     def index():
