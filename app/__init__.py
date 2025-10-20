@@ -7,6 +7,7 @@ from sqlalchemy.engine import make_url
 from sqlalchemy.exc import ArgumentError
 
 from .config import Config
+from .db_maintenance import ensure_database_schema
 
 db = SQLAlchemy()
 migrate = Migrate()
@@ -53,5 +54,8 @@ def create_app(config_class: type[Config] | None = None) -> Flask:
         from flask import redirect, url_for
 
         return redirect(url_for("coach.login"))
+
+    with app.app_context():
+        ensure_database_schema(db.engine, app.logger)
 
     return app
