@@ -23,7 +23,7 @@ def admin_app():
             coach = Coach(
                 email="coach@example.com",
                 name="Coach One",
-                mobile_number="0400000001",
+                phone="0400000001",
                 city="Sydney",
                 state="NSW",
                 vehicle_types="AT,MT",
@@ -36,14 +36,12 @@ def admin_app():
             admin_coach = Coach(
                 email="admin@example.com",
                 name="Admin User",
-                mobile_number="0400000002",
+                phone="0400000002",
                 city="Melbourne",
                 state="VIC",
                 vehicle_types="AT,MT",
             )
             db.session.add(admin_coach)
-        else:
-            admin_coach.mobile_number = "0400000002"
         admin_coach.set_password("password123")
         db.session.flush()
 
@@ -118,7 +116,7 @@ def test_account_roles_flagged(admin_app):
 def test_admin_overview_and_slot_creation(client, admin_app):
     response = client.post(
         "/coach/login",
-        data={"mobile_number": "0400000002", "password": "password123"},
+        data={"email": "admin@example.com", "password": "password123"},
         follow_redirects=True,
     )
     assert response.status_code == 200
@@ -157,7 +155,7 @@ def test_admin_overview_and_slot_creation(client, admin_app):
 def test_non_admin_cannot_access_personnel(client):
     client.post(
         "/coach/login",
-        data={"mobile_number": "0400000001", "password": "password123"},
+        data={"email": "coach@example.com", "password": "password123"},
         follow_redirects=True,
     )
 
@@ -169,7 +167,7 @@ def test_non_admin_cannot_access_personnel(client):
 def test_admin_can_manage_personnel(client, admin_app):
     client.post(
         "/coach/login",
-        data={"mobile_number": "0400000002", "password": "password123"},
+        data={"email": "admin@example.com", "password": "password123"},
         follow_redirects=True,
     )
 
@@ -186,7 +184,7 @@ def test_admin_can_manage_personnel(client, admin_app):
         ("email", "jordan@example.com"),
         ("password", "secret99"),
         ("state", "QLD"),
-        ("mobile_number", "0400123123"),
+        ("phone", "0400123123"),
         ("city", "Brisbane"),
         ("vehicle_types", "AT"),
         ("vehicle_types", "MT"),

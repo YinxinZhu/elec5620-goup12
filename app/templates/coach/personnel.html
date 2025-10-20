@@ -44,8 +44,8 @@
           <hr>
           <h6>Coach &amp; Administrator details</h6>
           <div class="mb-3">
-            <label class="form-label" for="coach_mobile_number">Mobile number</label>
-            <input type="tel" class="form-control" id="coach_mobile_number" name="mobile_number" placeholder="Required for coach/admin accounts">
+            <label class="form-label" for="phone">Phone</label>
+            <input class="form-control" id="phone" name="phone" placeholder="Required for coach/admin accounts">
           </div>
           <div class="mb-3">
             <label class="form-label" for="city">City</label>
@@ -66,14 +66,14 @@
           <h6>Student details</h6>
           <div class="mb-3">
             <label class="form-label" for="mobile_number">Mobile number</label>
-            <input type="tel" class="form-control" id="mobile_number" name="mobile_number" placeholder="Required for student accounts">
+            <input class="form-control" id="mobile_number" name="mobile_number" placeholder="Required for student accounts">
           </div>
           <div class="mb-3">
             <label class="form-label" for="assigned_coach_id">Assigned coach</label>
             <select class="form-select" id="assigned_coach_id" name="assigned_coach_id">
               <option value="">Unassigned</option>
               {% for coach in coach_choices %}
-              <option value="{{ coach.id }}">{{ coach.name }} ({{ coach.mobile_number }})</option>
+              <option value="{{ coach.id }}">{{ coach.name }} ({{ coach.email }})</option>
               {% endfor %}
             </select>
           </div>
@@ -92,7 +92,6 @@
               <th scope="col">Role</th>
               <th scope="col">Name</th>
               <th scope="col">Email</th>
-              <th scope="col">Mobile</th>
               <th scope="col">Location</th>
               <th scope="col">Update password</th>
             </tr>
@@ -103,7 +102,6 @@
               <td>{% if coach.is_admin %}<span class="badge bg-warning text-dark">Admin</span>{% else %}Coach{% endif %}</td>
               <td>{{ coach.name }}</td>
               <td>{{ coach.email }}</td>
-              <td>{{ coach.mobile_number }}</td>
               <td>{{ coach.city }}, {{ coach.state }}</td>
               <td>
                 <form class="d-flex gap-2" method="post">
@@ -116,7 +114,7 @@
               </td>
             </tr>
             {% else %}
-            <tr><td colspan="6" class="text-muted">No coach accounts available.</td></tr>
+            <tr><td colspan="5" class="text-muted">No coach accounts available.</td></tr>
             {% endfor %}
           </tbody>
         </table>

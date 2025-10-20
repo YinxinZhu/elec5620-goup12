@@ -12,6 +12,7 @@ from flask import (
     url_for,
 )
 from flask_login import current_user, login_required, login_user, logout_user
+from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from urllib.parse import urljoin, urlparse
 
@@ -327,7 +328,7 @@ def _handle_account_creation() -> None:
         name = (request.form.get("name") or "").strip()
         email = (request.form.get("email") or "").strip().lower()
         password = request.form.get("password") or ""
-        mobile_number = (request.form.get("mobile_number") or "").strip()
+        phone = (request.form.get("phone") or "").strip()
         city = (request.form.get("city") or "").strip()
         state = (request.form.get("state") or "").strip().upper()
         if state not in STATE_CHOICES:
@@ -335,19 +336,14 @@ def _handle_account_creation() -> None:
             return
         vehicle_types = _parse_vehicle_types(request.form.getlist("vehicle_types"))
 
-        if not all(
-            [name, email, password, mobile_number, city, state, vehicle_types]
-        ):
-            flash(
-                "All coach/admin fields are required, including a mobile number.",
-                "warning",
-            )
+        if not all([name, email, password, phone, city, state, vehicle_types]):
+            flash("All coach/admin fields are required, including vehicle types.", "warning")
             return
 
         coach = Coach(
             name=name,
             email=email,
-            mobile_number=mobile_number,
+            phone=phone,
             city=city,
             state=state,
             vehicle_types=vehicle_types,
@@ -359,10 +355,7 @@ def _handle_account_creation() -> None:
             db.session.flush()
         except IntegrityError:
             db.session.rollback()
-            flash(
-                "Unable to create account: duplicate email or mobile number.",
-                "danger",
-            )
+            flash("Email already exists for another coach account.", "danger")
             return
 
         if role == "admin":

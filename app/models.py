@@ -74,10 +74,6 @@ class Admin(db.Model):
     def check_password(self, password: str) -> bool:
         return self.coach.check_password(password)
 
-    @property
-    def mobile_number(self) -> str:
-        return self.coach.mobile_number
-
 
 class Student(db.Model):
     __tablename__ = "students"
