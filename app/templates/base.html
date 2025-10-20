@@ -26,6 +26,9 @@
             <li class="nav-item"><a class="nav-link" href="{{ url_for('coach.slots') }}">Availability</a></li>
             <li class="nav-item"><a class="nav-link" href="{{ url_for('coach.appointments') }}">Appointments</a></li>
             <li class="nav-item"><a class="nav-link" href="{{ url_for('coach.students') }}">Students</a></li>
+            {% if current_user.is_admin %}
+            <li class="nav-item"><a class="nav-link" href="{{ url_for('coach.personnel') }}">Personnel</a></li>
+            {% endif %}
             <li class="nav-item"><a class="nav-link" href="{{ url_for('coach.profile') }}">Profile</a></li>
             {% endif %}
           </ul>
