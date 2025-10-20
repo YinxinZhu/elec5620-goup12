@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{% block title %}DriveWise{% endblock %}</title>
+    <title>{% block title %}Learner Practice Portal{% endblock %}</title>
     <link
       href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"
       rel="stylesheet"
@@ -26,12 +26,20 @@
             <li class="nav-item"><a class="nav-link" href="{{ url_for('coach.slots') }}">Availability</a></li>
             <li class="nav-item"><a class="nav-link" href="{{ url_for('coach.appointments') }}">Appointments</a></li>
             <li class="nav-item"><a class="nav-link" href="{{ url_for('coach.students') }}">Students</a></li>
+            {% if current_user.is_admin %}
+            <li class="nav-item"><a class="nav-link" href="{{ url_for('coach.personnel') }}">Personnel</a></li>
+            {% endif %}
             <li class="nav-item"><a class="nav-link" href="{{ url_for('coach.profile') }}">Profile</a></li>
             {% endif %}
           </ul>
           <ul class="navbar-nav">
             {% if current_user.is_authenticated %}
-            <li class="nav-item"><span class="navbar-text">Hi, {{ current_user.name }}</span></li>
+            <li class="nav-item d-flex align-items-center gap-2">
+              <span class="navbar-text">Hi, {{ current_user.name }}</span>
+              {% if current_user.is_admin %}
+              <span class="badge bg-warning text-dark">Admin</span>
+              {% endif %}
+            </li>
             <li class="nav-item"><a class="nav-link" href="{{ url_for('coach.logout') }}">Logout</a></li>
             {% endif %}
           </ul>
