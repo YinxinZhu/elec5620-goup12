@@ -1,4 +1,4 @@
-"""Service layer helpers for application features."""
+"""Service layer helpers for multi-state exam functionality."""
 
 from .progress import (
     ProgressAccessError,

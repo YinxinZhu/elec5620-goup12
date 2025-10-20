@@ -59,13 +59,7 @@ def switch_student_state(
     *,
     acting_student: Student | None = None,
 ) -> str:
-    """Switch the student's active state and return the rule summary message.
-
-    The caller may optionally provide ``acting_student``.  When supplied it must
-    be the same student; otherwise :class:`StateSwitchPermissionError` is raised.
-    The function performs the validations required by the specification and
-    persists the change immediately to keep the student preferences consistent.
-    """
+    """Switch the student's active state and return the rule summary message."""
 
     if student.id is None:
         raise StateSwitchValidationError("Student must be persisted before switching state.")
