@@ -287,5 +287,5 @@ def test_mock_exam_flow(seeded_app, client):
         student = Student.query.filter_by(mobile_number="0410000004").one()
         assert MockExamSummary.query.filter_by(student_id=student.id).count() == 1
         assert NotebookEntry.query.filter_by(student_id=student.id, state="NSW").count() >= 1
-        session_record = StudentExamSession.query.get(session_id)
+        session_record = db.session.get(StudentExamSession, session_id)
         assert session_record.finished_at is not None

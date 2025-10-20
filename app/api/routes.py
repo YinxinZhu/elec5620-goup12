@@ -5,7 +5,7 @@ from datetime import date, datetime, timedelta
 from functools import wraps
 from typing import Any
 
-from flask import Response, current_app, g, jsonify, request
+from flask import Response, abort, current_app, g, jsonify, request
 from .. import db
 from ..models import (
     ExamRule,
@@ -38,6 +38,13 @@ from . import api_bp
 PHONE_REGEX = re.compile(r"^\+?\d{8,15}$")
 VALID_LANGUAGES = {"ENGLISH", "CHINESE"}
 VALID_OPTIONS = {"A", "B", "C", "D"}
+
+
+def _question_or_404(question_id: int) -> Question:
+    question = db.session.get(Question, question_id)
+    if not question:
+        abort(404)
+    return question
 
 
 def _json_error(message: str, status: int = 400):
@@ -471,7 +478,7 @@ def list_questions():
 @_require_auth
 def get_question(question_id: int):
     student: Student = g.current_student
-    question = Question.query.get_or_404(question_id)
+    question = _question_or_404(question_id)
     if question.state_scope not in {"ALL", student.state}:
         return _json_error("Question not available for current state.", 403)
 
@@ -498,7 +505,7 @@ def get_question(question_id: int):
 @_require_auth
 def attempt_question(question_id: int):
     student: Student = g.current_student
-    question = Question.query.get_or_404(question_id)
+    question = _question_or_404(question_id)
     if question.state_scope not in {"ALL", student.state}:
         return _json_error("Question not available for current state.", 403)
 
@@ -557,7 +564,7 @@ def attempt_question(question_id: int):
 def star_question(question_id: int):
     student: Student = g.current_student
     action = (request.get_json(silent=True) or {}).get("action", "star")
-    question = Question.query.get_or_404(question_id)
+    question = _question_or_404(question_id)
     if question.state_scope not in {"ALL", student.state}:
         return _json_error("Question not available for current state.", 403)
 
