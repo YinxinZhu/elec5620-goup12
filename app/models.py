@@ -365,6 +365,62 @@ class Appointment(db.Model):
     student = db.relationship("Student", back_populates="bookings")
 
 
+class ExamRule(db.Model):
+    __tablename__ = "exam_rules"
+
+    state = db.Column(db.String(10), primary_key=True)
+    total_questions = db.Column(db.Integer, nullable=False)
+    pass_mark = db.Column(db.Integer, nullable=False)
+    time_limit_minutes = db.Column(db.Integer, nullable=False)
+
+
+class Question(db.Model):
+    __tablename__ = "questions"
+
+    id = db.Column(db.Integer, primary_key=True)
+    qid = db.Column(db.String(50), nullable=False)
+    prompt = db.Column(db.Text, nullable=False)
+    state_scope = db.Column(db.String(10), nullable=False, default="ALL")
+
+    __table_args__ = (
+        UniqueConstraint("qid", "state_scope", name="uq_question_qid_scope"),
+    )
+
+
+class StudentStateProgress(db.Model):
+    __tablename__ = "student_state_progress"
+
+    id = db.Column(db.Integer, primary_key=True)
+    student_id = db.Column(db.Integer, db.ForeignKey("students.id"), nullable=False)
+    state = db.Column(db.String(10), nullable=False)
+    total_attempts = db.Column(db.Integer, nullable=False, default=0)
+    best_score = db.Column(db.Integer)
+    last_active_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    student = db.relationship("Student", back_populates="state_progress")
+
+    __table_args__ = (
+        UniqueConstraint("student_id", "state", name="uq_progress_student_state"),
+    )
+
+
+class StudentExamSession(db.Model):
+    __tablename__ = "student_exam_sessions"
+
+    id = db.Column(db.Integer, primary_key=True)
+    student_id = db.Column(db.Integer, db.ForeignKey("students.id"), nullable=False)
+    state = db.Column(db.String(10), nullable=False)
+    status = db.Column(
+        Enum("ongoing", "submitted", "abandoned", name="exam_session_status"),
+        nullable=False,
+        default="ongoing",
+    )
+    started_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    finished_at = db.Column(db.DateTime)
+
+    student = db.relationship("Student", back_populates="exam_sessions")
+
+
 __all__ = [
     "Coach",
     "Student",
@@ -383,4 +439,8 @@ __all__ = [
     "StudentExamAnswer",
     "AvailabilitySlot",
     "Appointment",
+    "ExamRule",
+    "Question",
+    "StudentStateProgress",
+    "StudentExamSession",
 ]
