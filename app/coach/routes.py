@@ -21,6 +21,17 @@ from ..models import Admin, Appointment, AvailabilitySlot, Coach, MockExamSummar
 
 coach_bp = Blueprint("coach", __name__, url_prefix="/coach")
 
+STATE_CHOICES: list[str] = [
+    "ACT",
+    "NSW",
+    "NT",
+    "QLD",
+    "SA",
+    "TAS",
+    "VIC",
+    "WA",
+]
+
 
 def _parse_vehicle_types(values: Iterable[str]) -> str:
     allowed = {"AT", "MT"}
@@ -111,18 +122,22 @@ def profile():
         current_user.name = request.form.get("name", current_user.name)
         current_user.phone = request.form.get("phone", current_user.phone)
         current_user.city = request.form.get("city", current_user.city)
-        current_user.state = request.form.get("state", current_user.state)
+        state_choice = (request.form.get("state") or "").strip().upper()
+        if state_choice not in STATE_CHOICES:
+            flash("Please choose a valid state or territory.", "warning")
+            return render_template("coach/profile.html", state_choices=STATE_CHOICES)
+        current_user.state = state_choice
         vehicle_inputs = request.form.getlist("vehicle_types")
         types = _parse_vehicle_types(vehicle_inputs)
         if not types:
             flash("Please select at least one vehicle type (AT/MT).", "warning")
-            return render_template("coach/profile.html")
+            return render_template("coach/profile.html", state_choices=STATE_CHOICES)
         current_user.vehicle_types = types
         current_user.bio = request.form.get("bio", current_user.bio)
         db.session.commit()
         flash("Profile updated successfully", "success")
         return redirect(url_for("coach.profile"))
-    return render_template("coach/profile.html")
+    return render_template("coach/profile.html", state_choices=STATE_CHOICES)
 
 
 @coach_bp.route("/students")
@@ -295,6 +310,7 @@ def personnel():
         coaches=coaches,
         students=students,
         coach_choices=coaches,
+        state_choices=STATE_CHOICES,
     )
 
 
@@ -311,6 +327,9 @@ def _handle_account_creation() -> None:
         phone = (request.form.get("phone") or "").strip()
         city = (request.form.get("city") or "").strip()
         state = (request.form.get("state") or "").strip().upper()
+        if state not in STATE_CHOICES:
+            flash("Please choose a valid state or territory.", "warning")
+            return
         vehicle_types = _parse_vehicle_types(request.form.getlist("vehicle_types"))
 
         if not all([name, email, password, phone, city, state, vehicle_types]):
@@ -354,6 +373,9 @@ def _handle_account_creation() -> None:
     password = request.form.get("password") or ""
     mobile_number = (request.form.get("mobile_number") or "").strip()
     state = (request.form.get("state") or "").strip().upper()
+    if state not in STATE_CHOICES:
+        flash("Please choose a valid state or territory.", "warning")
+        return
     assigned_coach_raw = request.form.get("assigned_coach_id")
     assigned_coach = None
     if assigned_coach_raw:
