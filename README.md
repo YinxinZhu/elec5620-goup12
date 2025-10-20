@@ -80,15 +80,17 @@ consuming the JSON endpoints described below.
 
 ## Demo credentials
 
-`seed-demo` provisions the following accounts for quick manual testing:
+`seed-demo` provisions the following accounts for quick manual testing. All web
+logins use **mobile number + password**, while the student mobile app/API also
+authenticates with the same pair:
 
-| Role          | Email               | Password     |
-| ------------- | ------------------- | ------------ |
-| Administrator | `admin@example.com` | `password123`|
-| Coach         | `coach@example.com` | `password123`|
-| Students      | `jamie@example.com` | `password123`|
-|               | `priya@example.com` | `password123`|
-|               | `morgan@example.com`| `password123`|
+| Role          | Mobile       | Email               | Password     |
+| ------------- | ------------ | ------------------- | ------------ |
+| Administrator | `0400999000` | `admin@example.com` | `password123`|
+| Coach         | `0400111222` | `coach@example.com` | `password123`|
+| Students      | `0400000100` | `jamie@example.com` | `password123`|
+|               | `0400000101` | `priya@example.com` | `password123`|
+|               | `0400000102` | `morgan@example.com`| `password123`|
 
 Administrators access all coach pages plus `/coach/personnel` for cross-role
 account provisioning and password resets.
@@ -97,7 +99,8 @@ account provisioning and password resets.
 
 ### Coach & administrator console
 
-1. **Log in** via `/coach/login` using a coach or administrator credential.
+1. **Log in** via `/coach/login` using the registered mobile number and
+   password for a coach or administrator.
 2. **Dashboard** highlights student engagement, upcoming appointments, and mock
    exam progress metrics.
 3. **Availability slots** can be created, edited, or deleted from

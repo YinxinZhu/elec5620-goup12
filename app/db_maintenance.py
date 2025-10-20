@@ -13,21 +13,33 @@ from sqlalchemy.orm import Session
 
 from . import db
 LEGACY_MOBILE_PREFIX = "040000"
+LEGACY_COACH_PREFIX = "049000"
 MOBILE_PADDING = 4
 
 DEFAULT_ADMIN_EMAIL = "admin@example.com"
 DEFAULT_ADMIN_PASSWORD = "password123"
 DEFAULT_ADMIN_NAME = "Platform Administrator"
-DEFAULT_ADMIN_PHONE = "0400 999 000"
+DEFAULT_ADMIN_PHONE = "0400999000"
 DEFAULT_ADMIN_CITY = "Sydney"
 DEFAULT_ADMIN_STATE = "NSW"
 DEFAULT_ADMIN_VEHICLE_TYPES = "AT,MT"
 DEFAULT_ADMIN_BIO = "Auto-generated administrator account with full access."
 
 
+def _normalize_mobile(raw_value: str) -> str:
+    digits = "".join(ch for ch in raw_value if ch and ch.isdigit())
+    if digits:
+        return digits
+    return (raw_value or "").strip()
+
+
 def _generate_placeholder_mobile(student_id: int) -> str:
     """Generate a stable placeholder mobile number for legacy records."""
     return f"{LEGACY_MOBILE_PREFIX}{student_id:0{MOBILE_PADDING}d}"
+
+
+def _generate_placeholder_coach_mobile(coach_id: int) -> str:
+    return f"{LEGACY_COACH_PREFIX}{coach_id:0{MOBILE_PADDING}d}"
 
 
 def ensure_student_mobile_column(engine: Engine, logger: logging.Logger | None = None) -> None:
@@ -84,6 +96,42 @@ def ensure_student_mobile_column(engine: Engine, logger: logging.Logger | None =
         raise
 
 
+def ensure_coach_mobile_uniqueness(engine: Engine, logger: logging.Logger | None = None) -> None:
+    """Normalize coach mobile numbers and enforce uniqueness for legacy data."""
+
+    inspector = inspect(engine)
+    tables: Iterable[str] = inspector.get_table_names()
+    if "coaches" not in tables:
+        return
+
+    logger = logger or logging.getLogger(__name__)
+
+    from .models import Coach
+
+    try:
+        with Session(bind=engine) as session:
+            seen: set[str] = set()
+            coaches = session.query(Coach).all()
+            for coach in coaches:
+                normalized = _normalize_mobile(getattr(coach, "phone", ""))
+                if not normalized or normalized in seen:
+                    normalized = _generate_placeholder_coach_mobile(coach.id)
+                coach.phone = normalized
+                seen.add(normalized)
+            session.commit()
+
+        with engine.begin() as connection:
+            connection.execute(
+                text(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS "
+                    "ix_coaches_phone ON coaches(phone)"
+                )
+            )
+    except SQLAlchemyError:
+        logger.exception("Failed to enforce unique coach mobile numbers during maintenance")
+        raise
+
+
 def ensure_admin_support(engine: Engine, logger: logging.Logger | None = None) -> None:
     """Guarantee the admin metadata and seed account exist for legacy databases."""
 
@@ -126,7 +174,7 @@ def ensure_admin_support(engine: Engine, logger: logging.Logger | None = None) -
                 coach = Coach(
                     email=DEFAULT_ADMIN_EMAIL,
                     name=DEFAULT_ADMIN_NAME,
-                    phone=DEFAULT_ADMIN_PHONE,
+                    phone=_normalize_mobile(DEFAULT_ADMIN_PHONE),
                     city=DEFAULT_ADMIN_CITY,
                     state=DEFAULT_ADMIN_STATE,
                     vehicle_types=DEFAULT_ADMIN_VEHICLE_TYPES,
@@ -140,6 +188,8 @@ def ensure_admin_support(engine: Engine, logger: logging.Logger | None = None) -
             elif coach.admin_profile is not None:
                 session.commit()
                 return
+            else:
+                coach.phone = _normalize_mobile(coach.phone or DEFAULT_ADMIN_PHONE)
 
             session.add(Admin(id=coach.id, created_at=datetime.utcnow()))
             session.commit()
@@ -188,5 +238,6 @@ def ensure_database_schema(engine: Engine, logger: logging.Logger | None = None)
 
     ensure_core_tables(engine, logger)
     ensure_student_mobile_column(engine, logger)
+    ensure_coach_mobile_uniqueness(engine, logger)
     ensure_admin_support(engine, logger)
     ensure_variant_support(engine, logger)

@@ -12,7 +12,6 @@ from flask import (
     url_for,
 )
 from flask_login import current_user, login_required, login_user, logout_user
-from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from urllib.parse import urljoin, urlparse
 
@@ -39,6 +38,13 @@ def _parse_vehicle_types(values: Iterable[str]) -> str:
     return ",".join(sorted(cleaned))
 
 
+def _normalize_mobile(raw_value: str) -> str:
+    digits = "".join(ch for ch in raw_value if ch.isdigit())
+    if digits:
+        return digits
+    return raw_value.strip()
+
+
 def _require_admin_access():
     if not current_user.is_admin:
         flash("Only administrators may access personnel management.", "danger")
@@ -58,9 +64,13 @@ def _is_safe_redirect_target(target: str | None) -> bool:
 @coach_bp.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
-        mobile_number = (request.form.get("mobile_number") or "").strip()
+        mobile = _normalize_mobile(request.form.get("mobile", ""))
         password = request.form.get("password", "")
-        coach = Coach.query.filter(Coach.mobile_number == mobile_number).first()
+        if not mobile or not password:
+            flash("Mobile number and password are required.", "danger")
+            return render_template("coach/login.html")
+
+        coach = Coach.query.filter(Coach.phone == mobile).first()
         if coach and coach.check_password(password):
             login_user(coach)
             flash("Welcome back!", "success")
@@ -120,11 +130,12 @@ def dashboard():
 def profile():
     if request.method == "POST":
         current_user.name = request.form.get("name", current_user.name)
-        submitted_mobile = (request.form.get("mobile_number") or "").strip()
-        if not submitted_mobile:
-            flash("Mobile number is required.", "warning")
+        phone_input = request.form.get("phone", "").strip()
+        normalized_phone = _normalize_mobile(phone_input)
+        if not normalized_phone:
+            flash("Please provide a valid mobile number.", "warning")
             return render_template("coach/profile.html", state_choices=STATE_CHOICES)
-        current_user.mobile_number = submitted_mobile
+        current_user.phone = normalized_phone
         current_user.city = request.form.get("city", current_user.city)
         state_choice = (request.form.get("state") or "").strip().upper()
         if state_choice not in STATE_CHOICES:
@@ -328,7 +339,7 @@ def _handle_account_creation() -> None:
         name = (request.form.get("name") or "").strip()
         email = (request.form.get("email") or "").strip().lower()
         password = request.form.get("password") or ""
-        phone = (request.form.get("phone") or "").strip()
+        phone = _normalize_mobile(request.form.get("phone") or "")
         city = (request.form.get("city") or "").strip()
         state = (request.form.get("state") or "").strip().upper()
         if state not in STATE_CHOICES:
@@ -337,7 +348,7 @@ def _handle_account_creation() -> None:
         vehicle_types = _parse_vehicle_types(request.form.getlist("vehicle_types"))
 
         if not all([name, email, password, phone, city, state, vehicle_types]):
-            flash("All coach/admin fields are required, including vehicle types.", "warning")
+            flash("All coach/admin fields are required, including mobile number and vehicle types.", "warning")
             return
 
         coach = Coach(
@@ -355,7 +366,7 @@ def _handle_account_creation() -> None:
             db.session.flush()
         except IntegrityError:
             db.session.rollback()
-            flash("Email already exists for another coach account.", "danger")
+            flash("Email or mobile number already exists for another coach account.", "danger")
             return
 
         if role == "admin":
@@ -375,7 +386,7 @@ def _handle_account_creation() -> None:
     name = (request.form.get("name") or "").strip()
     email = (request.form.get("email") or "").strip().lower()
     password = request.form.get("password") or ""
-    mobile_number = (request.form.get("mobile_number") or "").strip()
+    mobile_number = _normalize_mobile(request.form.get("mobile_number") or "")
     state = (request.form.get("state") or "").strip().upper()
     if state not in STATE_CHOICES:
         flash("Please choose a valid state or territory.", "warning")
