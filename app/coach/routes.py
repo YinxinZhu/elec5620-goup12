@@ -13,10 +13,11 @@ from flask import (
 )
 from flask_login import current_user, login_required, login_user, logout_user
 from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
 from urllib.parse import urljoin, urlparse
 
 from .. import db
-from ..models import Appointment, AvailabilitySlot, Coach, MockExamSummary, Student
+from ..models import Admin, Appointment, AvailabilitySlot, Coach, MockExamSummary, Student
 
 coach_bp = Blueprint("coach", __name__, url_prefix="/coach")
 
@@ -25,6 +26,13 @@ def _parse_vehicle_types(values: Iterable[str]) -> str:
     allowed = {"AT", "MT"}
     cleaned = {v for v in (value.strip().upper() for value in values) if v in allowed}
     return ",".join(sorted(cleaned))
+
+
+def _require_admin_access():
+    if not current_user.is_admin:
+        flash("Only administrators may access personnel management.", "danger")
+        return redirect(url_for("coach.dashboard"))
+    return None
 
 def _is_safe_redirect_target(target: str | None) -> bool:
     if not target:
@@ -64,20 +72,30 @@ def logout():
 @coach_bp.route("/dashboard")
 @login_required
 def dashboard():
-    upcoming_slots = (
-        AvailabilitySlot.query.filter_by(coach_id=current_user.id)
-        .filter(AvailabilitySlot.start_time >= datetime.utcnow())
-        .order_by(AvailabilitySlot.start_time.asc())
-        .limit(5)
-        .all()
-    )
-    student_count = Student.query.filter_by(assigned_coach_id=current_user.id).count()
-    pending_bookings = (
-        Appointment.query.join(AvailabilitySlot)
-        .filter(AvailabilitySlot.coach_id == current_user.id)
-        .filter(Appointment.status == "booked")
-        .count()
-    )
+    slot_query = AvailabilitySlot.query.filter(
+        AvailabilitySlot.start_time >= datetime.utcnow()
+    ).order_by(AvailabilitySlot.start_time.asc())
+    if current_user.is_admin:
+        upcoming_slots = slot_query.limit(5).all()
+        student_count = Student.query.count()
+        pending_bookings = (
+            Appointment.query.filter(Appointment.status == "booked").count()
+        )
+    else:
+        upcoming_slots = (
+            slot_query.filter(AvailabilitySlot.coach_id == current_user.id)
+            .limit(5)
+            .all()
+        )
+        student_count = Student.query.filter_by(
+            assigned_coach_id=current_user.id
+        ).count()
+        pending_bookings = (
+            Appointment.query.join(AvailabilitySlot)
+            .filter(AvailabilitySlot.coach_id == current_user.id)
+            .filter(Appointment.status == "booked")
+            .count()
+        )
     return render_template(
         "coach/dashboard.html",
         upcoming_slots=upcoming_slots,
@@ -110,11 +128,14 @@ def profile():
 @coach_bp.route("/students")
 @login_required
 def students():
-    students = (
-        Student.query.filter_by(assigned_coach_id=current_user.id)
-        .order_by(Student.name.asc())
-        .all()
-    )
+    if current_user.is_admin:
+        students = Student.query.order_by(Student.name.asc()).all()
+    else:
+        students = (
+            Student.query.filter_by(assigned_coach_id=current_user.id)
+            .order_by(Student.name.asc())
+            .all()
+        )
     summaries = {
         student.id: {
             "attempts": len(student.mock_exam_summaries),
@@ -124,13 +145,32 @@ def students():
         }
         for student in students
     }
-    return render_template("coach/students.html", students=students, summaries=summaries)
+    coach_lookup = {}
+    if current_user.is_admin:
+        coach_lookup = {coach.id: coach for coach in Coach.query.order_by(Coach.name).all()}
+    return render_template(
+        "coach/students.html",
+        students=students,
+        summaries=summaries,
+        coach_lookup=coach_lookup,
+    )
 
 
 @coach_bp.route("/slots", methods=["GET", "POST"])
 @login_required
 def slots():
     if request.method == "POST":
+        if current_user.is_admin:
+            try:
+                selected_coach_id = int(request.form.get("coach_id", ""))
+            except (TypeError, ValueError):
+                flash("Please choose a coach for the new slot.", "warning")
+                return redirect(url_for("coach.slots"))
+            if not db.session.get(Coach, selected_coach_id):
+                flash("Selected coach could not be found.", "danger")
+                return redirect(url_for("coach.slots"))
+        else:
+            selected_coach_id = current_user.id
         try:
             start_time = datetime.fromisoformat(request.form["start_time"])  # type: ignore[arg-type]
         except (KeyError, ValueError):
@@ -145,7 +185,7 @@ def slots():
             flash("Location is required", "warning")
             return redirect(url_for("coach.slots"))
         slot = AvailabilitySlot(
-            coach_id=current_user.id,
+            coach_id=selected_coach_id,
             start_time=start_time,
             duration_minutes=duration,
             location_text=location_text,
@@ -159,18 +199,23 @@ def slots():
             flash("Unable to create slot: duplicate or invalid data", "danger")
         return redirect(url_for("coach.slots"))
 
-    slots = (
-        AvailabilitySlot.query.filter_by(coach_id=current_user.id)
-        .order_by(AvailabilitySlot.start_time.asc())
-        .all()
-    )
-    return render_template("coach/slots.html", slots=slots)
+    slot_query = AvailabilitySlot.query.order_by(AvailabilitySlot.start_time.asc())
+    if not current_user.is_admin:
+        slot_query = slot_query.filter_by(coach_id=current_user.id)
+    slots = slot_query.all()
+    coach_choices = []
+    if current_user.is_admin:
+        coach_choices = Coach.query.order_by(Coach.name.asc()).all()
+    return render_template("coach/slots.html", slots=slots, coach_choices=coach_choices)
 
 
 @coach_bp.route("/slots/<int:slot_id>/delete", methods=["POST"])
 @login_required
 def delete_slot(slot_id: int):
-    slot = AvailabilitySlot.query.filter_by(id=slot_id, coach_id=current_user.id).first_or_404()
+    slot_query = AvailabilitySlot.query.filter_by(id=slot_id)
+    if not current_user.is_admin:
+        slot_query = slot_query.filter_by(coach_id=current_user.id)
+    slot = slot_query.first_or_404()
     if slot.appointment and slot.appointment.status == "booked":
         flash("Cannot delete a slot with an active booking.", "danger")
         return redirect(url_for("coach.slots"))
@@ -183,23 +228,34 @@ def delete_slot(slot_id: int):
 @coach_bp.route("/appointments")
 @login_required
 def appointments():
-    appointments = (
-        Appointment.query.join(AvailabilitySlot)
-        .filter(AvailabilitySlot.coach_id == current_user.id)
-        .order_by(AvailabilitySlot.start_time.desc())
-        .all()
+    appointment_query = Appointment.query.join(AvailabilitySlot).order_by(
+        AvailabilitySlot.start_time.desc()
     )
-    return render_template("coach/appointments.html", appointments=appointments)
+    if not current_user.is_admin:
+        appointment_query = appointment_query.filter(
+            AvailabilitySlot.coach_id == current_user.id
+        )
+    appointments = appointment_query.all()
+    coach_lookup = {}
+    if current_user.is_admin:
+        coach_lookup = {coach.id: coach for coach in Coach.query.order_by(Coach.name).all()}
+    return render_template(
+        "coach/appointments.html",
+        appointments=appointments,
+        coach_lookup=coach_lookup,
+    )
 
 
 @coach_bp.route("/appointments/<int:appointment_id>/status", methods=["POST"])
 @login_required
 def update_appointment_status(appointment_id: int):
+    appointment_query = Appointment.query.join(AvailabilitySlot)
+    if not current_user.is_admin:
+        appointment_query = appointment_query.filter(
+            AvailabilitySlot.coach_id == current_user.id
+        )
     appointment = (
-        Appointment.query.join(AvailabilitySlot)
-        .filter(AvailabilitySlot.coach_id == current_user.id)
-        .filter(Appointment.id == appointment_id)
-        .first_or_404()
+        appointment_query.filter(Appointment.id == appointment_id).first_or_404()
     )
     status = request.form.get("status")
     if status not in {"booked", "cancelled", "completed"}:
@@ -213,3 +269,159 @@ def update_appointment_status(appointment_id: int):
     db.session.commit()
     flash("Appointment updated", "success")
     return redirect(url_for("coach.appointments"))
+
+
+@coach_bp.route("/personnel", methods=["GET", "POST"])
+@login_required
+def personnel():
+    redirect_response = _require_admin_access()
+    if redirect_response:
+        return redirect_response
+
+    if request.method == "POST":
+        form_type = request.form.get("form_type")
+        if form_type == "create":
+            _handle_account_creation()
+        elif form_type == "update_password":
+            _handle_password_update()
+        else:
+            flash("Unknown action requested.", "danger")
+        return redirect(url_for("coach.personnel"))
+
+    coaches = Coach.query.order_by(Coach.name.asc()).all()
+    students = Student.query.order_by(Student.name.asc()).all()
+    return render_template(
+        "coach/personnel.html",
+        coaches=coaches,
+        students=students,
+        coach_choices=coaches,
+    )
+
+
+def _handle_account_creation() -> None:
+    role = (request.form.get("role") or "").strip().lower()
+    if role not in {"coach", "student", "admin"}:
+        flash("Please choose a valid account type.", "warning")
+        return
+
+    if role in {"coach", "admin"}:
+        name = (request.form.get("name") or "").strip()
+        email = (request.form.get("email") or "").strip().lower()
+        password = request.form.get("password") or ""
+        phone = (request.form.get("phone") or "").strip()
+        city = (request.form.get("city") or "").strip()
+        state = (request.form.get("state") or "").strip().upper()
+        vehicle_types = _parse_vehicle_types(request.form.getlist("vehicle_types"))
+
+        if not all([name, email, password, phone, city, state, vehicle_types]):
+            flash("All coach/admin fields are required, including vehicle types.", "warning")
+            return
+
+        coach = Coach(
+            name=name,
+            email=email,
+            phone=phone,
+            city=city,
+            state=state,
+            vehicle_types=vehicle_types,
+        )
+        coach.set_password(password)
+        db.session.add(coach)
+
+        try:
+            db.session.flush()
+        except IntegrityError:
+            db.session.rollback()
+            flash("Email already exists for another coach account.", "danger")
+            return
+
+        if role == "admin":
+            db.session.add(Admin(id=coach.id))
+
+        try:
+            db.session.commit()
+        except IntegrityError:
+            db.session.rollback()
+            flash("Unable to create account due to duplicate information.", "danger")
+            return
+
+        flash("Account created successfully.", "success")
+        return
+
+    # Student creation
+    name = (request.form.get("name") or "").strip()
+    email = (request.form.get("email") or "").strip().lower()
+    password = request.form.get("password") or ""
+    mobile_number = (request.form.get("mobile_number") or "").strip()
+    state = (request.form.get("state") or "").strip().upper()
+    assigned_coach_raw = request.form.get("assigned_coach_id")
+    assigned_coach = None
+    if assigned_coach_raw:
+        try:
+            assigned_coach = db.session.get(Coach, int(assigned_coach_raw))
+        except (TypeError, ValueError):
+            assigned_coach = None
+
+    if not all([name, email, password, mobile_number, state]):
+        flash("All student fields are required.", "warning")
+        return
+
+    student = Student(
+        name=name,
+        email=email,
+        mobile_number=mobile_number,
+        state=state,
+        preferred_language="ENGLISH",
+    )
+    if assigned_coach:
+        student.coach = assigned_coach
+    student.set_password(password)
+    db.session.add(student)
+
+    try:
+        db.session.commit()
+    except IntegrityError:
+        db.session.rollback()
+        flash("Unable to create student: duplicate email or mobile number.", "danger")
+        return
+
+    flash("Account created successfully.", "success")
+
+
+def _handle_password_update() -> None:
+    account_type = (request.form.get("account_type") or "").strip().lower()
+    account_id = request.form.get("account_id")
+    new_password = request.form.get("new_password") or ""
+
+    if account_type not in {"coach", "student", "admin"}:
+        flash("Unsupported account type for password update.", "danger")
+        return
+
+    try:
+        identity = int(account_id)
+    except (TypeError, ValueError):
+        flash("Invalid account identifier.", "danger")
+        return
+
+    if len(new_password) < 6:
+        flash("Please supply a password of at least 6 characters.", "warning")
+        return
+
+    if account_type == "student":
+        entity = db.session.get(Student, identity)
+        if not entity:
+            flash("Student account not found.", "danger")
+            return
+        entity.set_password(new_password)
+    else:
+        coach = db.session.get(Coach, identity)
+        if not coach:
+            flash("Coach account not found.", "danger")
+            return
+        if account_type == "admin" and not coach.is_admin:
+            flash("Selected account is not an administrator.", "danger")
+            return
+        coach.set_password(new_password)
+
+    db.session.commit()
+    flash("Password updated successfully.", "success")
