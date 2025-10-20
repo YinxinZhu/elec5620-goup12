@@ -18,30 +18,35 @@ def admin_app():
     with app.app_context():
         db.create_all()
 
-        coach = Coach(
-            email="coach@example.com",
-            name="Coach One",
-            phone="0400000001",
-            city="Sydney",
-            state="NSW",
-            vehicle_types="AT,MT",
-        )
-        coach.set_password("password123")
+        coach = Coach.query.filter_by(email="coach@example.com").first()
+        if not coach:
+            coach = Coach(
+                email="coach@example.com",
+                name="Coach One",
+                phone="0400000001",
+                city="Sydney",
+                state="NSW",
+                vehicle_types="AT,MT",
+            )
+            coach.set_password("password123")
+            db.session.add(coach)
 
-        admin_coach = Coach(
-            email="admin@example.com",
-            name="Admin User",
-            phone="0400000002",
-            city="Melbourne",
-            state="VIC",
-            vehicle_types="AT,MT",
-        )
+        admin_coach = Coach.query.filter_by(email="admin@example.com").first()
+        if not admin_coach:
+            admin_coach = Coach(
+                email="admin@example.com",
+                name="Admin User",
+                phone="0400000002",
+                city="Melbourne",
+                state="VIC",
+                vehicle_types="AT,MT",
+            )
+            db.session.add(admin_coach)
         admin_coach.set_password("password123")
-
-        db.session.add_all([coach, admin_coach])
         db.session.flush()
 
-        db.session.add(Admin(id=admin_coach.id))
+        if not admin_coach.admin_profile:
+            db.session.add(Admin(id=admin_coach.id))
 
         student_a = Student(
             name="Jamie Lee",

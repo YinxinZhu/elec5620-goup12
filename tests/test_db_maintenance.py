@@ -10,9 +10,12 @@ from sqlalchemy.exc import IntegrityError
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from app import create_app, db
+from app.config import TestConfig
 from app.db_maintenance import (
     DEFAULT_ADMIN_EMAIL,
     ensure_admin_support,
+    ensure_database_schema,
     ensure_student_mobile_column,
 )
 from app.models import Coach
@@ -125,3 +128,18 @@ def test_ensure_admin_support_is_idempotent(coach_engine):
 
     assert admin_count == 1
     assert coach_count == 1
+
+
+def test_ensure_database_schema_populates_core_tables(tmp_path):
+    class FileConfig(TestConfig):
+        SQLALCHEMY_DATABASE_URI = f"sqlite:///{tmp_path / 'maintenance.db'}"
+
+    app = create_app(FileConfig)
+
+    with app.app_context():
+        engine = db.engine
+        ensure_database_schema(engine, app.logger)
+        inspector = inspect(engine)
+        tables = set(inspector.get_table_names())
+
+    assert {"coaches", "students"}.issubset(tables)

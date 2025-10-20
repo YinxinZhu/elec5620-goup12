@@ -11,6 +11,7 @@ from sqlalchemy.engine import Engine
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
+from . import db
 LEGACY_MOBILE_PREFIX = "040000"
 MOBILE_PADDING = 4
 
@@ -171,9 +172,21 @@ def ensure_variant_support(engine: Engine, logger: logging.Logger | None = None)
         raise
 
 
+def ensure_core_tables(engine: Engine, logger: logging.Logger | None = None) -> None:
+    """Ensure the base SQLAlchemy models are materialised for new databases."""
+
+    logger = logger or logging.getLogger(__name__)
+    try:
+        db.create_all()
+    except SQLAlchemyError:
+        logger.exception("Failed to create core tables during maintenance")
+        raise
+
+
 def ensure_database_schema(engine: Engine, logger: logging.Logger | None = None) -> None:
     """Run all lightweight schema checks for legacy compatibility."""
 
+    ensure_core_tables(engine, logger)
     ensure_student_mobile_column(engine, logger)
     ensure_admin_support(engine, logger)
     ensure_variant_support(engine, logger)

@@ -6,13 +6,13 @@ from pathlib import Path
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import ArgumentError
 
-from .config import Config
-from .db_maintenance import ensure_database_schema
-
 db = SQLAlchemy()
 migrate = Migrate()
 login_manager = LoginManager()
 login_manager.login_view = "coach.login"
+
+from .config import Config
+from .db_maintenance import ensure_database_schema
 
 def create_app(config_class: type[Config] | None = None) -> Flask:
     app = Flask(__name__, template_folder=str(Path(__file__).parent / "templates"))

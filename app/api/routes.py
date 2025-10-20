@@ -55,13 +55,6 @@ def _question_or_404(question_id: int) -> Question:
     return question
 
 
-def _question_or_404(question_id: int) -> Question:
-    question = db.session.get(Question, question_id)
-    if not question:
-        abort(404)
-    return question
-
-
 def _json_error(message: str, status: int = 400):
     return jsonify({"error": message}), status
 
