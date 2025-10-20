@@ -2,11 +2,16 @@
 {% block title %}Coach Dashboard{% endblock %}
 {% block content %}
 <h1 class="h3 mb-4">Welcome back, {{ current_user.name }}!</h1>
+{% if current_user.is_admin %}
+<div class="alert alert-warning" role="status">
+  <strong>Administrator overview:</strong> You are viewing aggregated insights across all coaches and students.
+</div>
+{% endif %}
 <div class="row g-3">
   <div class="col-md-4">
     <div class="card border-0 shadow-sm h-100">
       <div class="card-body">
-        <h2 class="h6 text-muted">Assigned Students</h2>
+        <h2 class="h6 text-muted">{{ 'Total Students' if current_user.is_admin else 'Assigned Students' }}</h2>
         <p class="display-6">{{ student_count }}</p>
         <a href="{{ url_for('coach.students') }}" class="btn btn-outline-primary btn-sm">Manage students</a>
       </div>
@@ -15,7 +20,7 @@
   <div class="col-md-4">
     <div class="card border-0 shadow-sm h-100">
       <div class="card-body">
-        <h2 class="h6 text-muted">Active Bookings</h2>
+        <h2 class="h6 text-muted">{{ 'Active Bookings (all coaches)' if current_user.is_admin else 'Active Bookings' }}</h2>
         <p class="display-6">{{ pending_bookings }}</p>
         <a href="{{ url_for('coach.appointments') }}" class="btn btn-outline-primary btn-sm">View appointments</a>
       </div>
@@ -24,15 +29,15 @@
   <div class="col-md-4">
     <div class="card border-0 shadow-sm h-100">
       <div class="card-body">
-        <h2 class="h6 text-muted">Availability</h2>
-        <p class="mb-0">Keep your slots up-to-date for easier booking.</p>
+        <h2 class="h6 text-muted">{{ 'Upcoming availability (all coaches)' if current_user.is_admin else 'Availability' }}</h2>
+        <p class="mb-0">Keep {{ 'coach schedules' if current_user.is_admin else 'your slots' }} up-to-date for easier booking.</p>
         <a href="{{ url_for('coach.slots') }}" class="btn btn-outline-primary btn-sm mt-2">Update availability</a>
       </div>
     </div>
   </div>
 </div>
 <div class="mt-5">
-  <h2 class="h5 mb-3">Upcoming availability</h2>
+  <h2 class="h5 mb-3">{{ 'Upcoming availability across coaches' if current_user.is_admin else 'Upcoming availability' }}</h2>
   {% if upcoming_slots %}
   <div class="list-group">
     {% for slot in upcoming_slots %}

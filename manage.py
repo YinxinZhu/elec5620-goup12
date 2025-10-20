@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 
 from app import create_app, db
 from app.models import (
+    Admin,
     Appointment,
     AvailabilitySlot,
     Coach,
@@ -42,6 +43,17 @@ def seed_demo() -> None:
     )
     coach.set_password("password123")
 
+    admin_coach = Coach(
+        email="admin@example.com",
+        name="DriveWise Administrator",
+        phone="0400 999 000",
+        city="Sydney",
+        state="NSW",
+        vehicle_types="AT,MT",
+        bio="Platform superuser with access to all coach and student features.",
+    )
+    admin_coach.set_password("password123")
+
     students = [
         Student(
             name="Jamie Lee",
@@ -58,6 +70,14 @@ def seed_demo() -> None:
             mobile_number="0400000101",
             preferred_language="ENGLISH",
             coach=coach,
+        ),
+        Student(
+            name="Morgan Patel",
+            email="morgan@example.com",
+            state="VIC",
+            mobile_number="0400000102",
+            preferred_language="ENGLISH",
+            coach=admin_coach,
         ),
     ]
     for student in students:
@@ -127,12 +147,19 @@ def seed_demo() -> None:
             duration_minutes=30,
             location_text="Parramatta Station",
         ),
+        AvailabilitySlot(
+            coach=admin_coach,
+            start_time=now + timedelta(days=3, hours=1),
+            duration_minutes=60,
+            location_text="Online video session",
+        ),
     ]
 
     booking = Appointment(slot=slots[0], student=students[0])
     slots[0].status = "booked"
 
     db.session.add(coach)
+    db.session.add(admin_coach)
     db.session.add_all(students)
     db.session.add_all(summaries)
     db.session.add_all(exam_rules)
@@ -158,6 +185,12 @@ def seed_demo() -> None:
         ]
     )
     db.session.add_all(slots)
+    db.session.flush()
+
+    admin_entry = Admin(id=admin_coach.id)
+    db.session.add(admin_entry)
     db.session.add(booking)
     db.session.commit()
-    app.logger.info("Demo data created: coach login coach@example.com / password123")
+    app.logger.info(
+        "Demo data created: coach login coach@example.com / password123; admin login admin@example.com / password123"
+    )

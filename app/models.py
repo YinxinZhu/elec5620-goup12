@@ -9,7 +9,19 @@ from werkzeug.security import check_password_hash, generate_password_hash
 from . import db
 
 
-class Coach(UserMixin, db.Model):
+class AccountUserMixin(UserMixin):
+    """Base mixin that encodes the account type within the session id."""
+
+    def get_id(self) -> str:  # pragma: no cover - exercised via login manager
+        role = "admin" if getattr(self, "is_admin", False) else "coach"
+        return f"{role}:{self.id}"
+
+    @property
+    def is_admin(self) -> bool:
+        return False
+
+
+class Coach(AccountUserMixin, db.Model):
     __tablename__ = "coaches"
 
     id = db.Column(db.Integer, primary_key=True)
@@ -27,6 +39,7 @@ class Coach(UserMixin, db.Model):
     )
 
     slots = db.relationship("AvailabilitySlot", back_populates="coach", cascade="all, delete-orphan")
+    admin_profile = db.relationship("Admin", back_populates="coach", uselist=False)
     students = db.relationship("Student", back_populates="coach")
 
     def set_password(self, password: str) -> None:
@@ -37,6 +50,29 @@ class Coach(UserMixin, db.Model):
 
     def vehicle_type_list(self) -> list[str]:
         return [v.strip() for v in self.vehicle_types.split(",") if v.strip()]
+
+    @property
+    def is_admin(self) -> bool:
+        return self.admin_profile is not None
+
+
+class Admin(db.Model):
+    __tablename__ = "admins"
+
+    id = db.Column(db.Integer, db.ForeignKey("coaches.id"), primary_key=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    coach = db.relationship("Coach", back_populates="admin_profile")
+
+    @property
+    def email(self) -> str:
+        return self.coach.email
+
+    def set_password(self, password: str) -> None:
+        self.coach.set_password(password)
+
+    def check_password(self, password: str) -> bool:
+        return self.coach.check_password(password)
 
 
 class Student(db.Model):
@@ -367,6 +403,7 @@ class Appointment(db.Model):
 
 __all__ = [
     "Coach",
+    "Admin",
     "Student",
     "MockExamSummary",
     "ExamRule",

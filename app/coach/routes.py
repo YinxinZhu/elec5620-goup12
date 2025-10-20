@@ -64,20 +64,30 @@ def logout():
 @coach_bp.route("/dashboard")
 @login_required
 def dashboard():
-    upcoming_slots = (
-        AvailabilitySlot.query.filter_by(coach_id=current_user.id)
-        .filter(AvailabilitySlot.start_time >= datetime.utcnow())
-        .order_by(AvailabilitySlot.start_time.asc())
-        .limit(5)
-        .all()
-    )
-    student_count = Student.query.filter_by(assigned_coach_id=current_user.id).count()
-    pending_bookings = (
-        Appointment.query.join(AvailabilitySlot)
-        .filter(AvailabilitySlot.coach_id == current_user.id)
-        .filter(Appointment.status == "booked")
-        .count()
-    )
+    slot_query = AvailabilitySlot.query.filter(
+        AvailabilitySlot.start_time >= datetime.utcnow()
+    ).order_by(AvailabilitySlot.start_time.asc())
+    if current_user.is_admin:
+        upcoming_slots = slot_query.limit(5).all()
+        student_count = Student.query.count()
+        pending_bookings = (
+            Appointment.query.filter(Appointment.status == "booked").count()
+        )
+    else:
+        upcoming_slots = (
+            slot_query.filter(AvailabilitySlot.coach_id == current_user.id)
+            .limit(5)
+            .all()
+        )
+        student_count = Student.query.filter_by(
+            assigned_coach_id=current_user.id
+        ).count()
+        pending_bookings = (
+            Appointment.query.join(AvailabilitySlot)
+            .filter(AvailabilitySlot.coach_id == current_user.id)
+            .filter(Appointment.status == "booked")
+            .count()
+        )
     return render_template(
         "coach/dashboard.html",
         upcoming_slots=upcoming_slots,
@@ -110,11 +120,14 @@ def profile():
 @coach_bp.route("/students")
 @login_required
 def students():
-    students = (
-        Student.query.filter_by(assigned_coach_id=current_user.id)
-        .order_by(Student.name.asc())
-        .all()
-    )
+    if current_user.is_admin:
+        students = Student.query.order_by(Student.name.asc()).all()
+    else:
+        students = (
+            Student.query.filter_by(assigned_coach_id=current_user.id)
+            .order_by(Student.name.asc())
+            .all()
+        )
     summaries = {
         student.id: {
             "attempts": len(student.mock_exam_summaries),
@@ -124,13 +137,32 @@ def students():
         }
         for student in students
     }
-    return render_template("coach/students.html", students=students, summaries=summaries)
+    coach_lookup = {}
+    if current_user.is_admin:
+        coach_lookup = {coach.id: coach for coach in Coach.query.order_by(Coach.name).all()}
+    return render_template(
+        "coach/students.html",
+        students=students,
+        summaries=summaries,
+        coach_lookup=coach_lookup,
+    )
 
 
 @coach_bp.route("/slots", methods=["GET", "POST"])
 @login_required
 def slots():
     if request.method == "POST":
+        if current_user.is_admin:
+            try:
+                selected_coach_id = int(request.form.get("coach_id", ""))
+            except (TypeError, ValueError):
+                flash("Please choose a coach for the new slot.", "warning")
+                return redirect(url_for("coach.slots"))
+            if not Coach.query.get(selected_coach_id):
+                flash("Selected coach could not be found.", "danger")
+                return redirect(url_for("coach.slots"))
+        else:
+            selected_coach_id = current_user.id
         try:
             start_time = datetime.fromisoformat(request.form["start_time"])  # type: ignore[arg-type]
         except (KeyError, ValueError):
@@ -145,7 +177,7 @@ def slots():
             flash("Location is required", "warning")
             return redirect(url_for("coach.slots"))
         slot = AvailabilitySlot(
-            coach_id=current_user.id,
+            coach_id=selected_coach_id,
             start_time=start_time,
             duration_minutes=duration,
             location_text=location_text,
@@ -159,18 +191,23 @@ def slots():
             flash("Unable to create slot: duplicate or invalid data", "danger")
         return redirect(url_for("coach.slots"))
 
-    slots = (
-        AvailabilitySlot.query.filter_by(coach_id=current_user.id)
-        .order_by(AvailabilitySlot.start_time.asc())
-        .all()
-    )
-    return render_template("coach/slots.html", slots=slots)
+    slot_query = AvailabilitySlot.query.order_by(AvailabilitySlot.start_time.asc())
+    if not current_user.is_admin:
+        slot_query = slot_query.filter_by(coach_id=current_user.id)
+    slots = slot_query.all()
+    coach_choices = []
+    if current_user.is_admin:
+        coach_choices = Coach.query.order_by(Coach.name.asc()).all()
+    return render_template("coach/slots.html", slots=slots, coach_choices=coach_choices)
 
 
 @coach_bp.route("/slots/<int:slot_id>/delete", methods=["POST"])
 @login_required
 def delete_slot(slot_id: int):
-    slot = AvailabilitySlot.query.filter_by(id=slot_id, coach_id=current_user.id).first_or_404()
+    slot_query = AvailabilitySlot.query.filter_by(id=slot_id)
+    if not current_user.is_admin:
+        slot_query = slot_query.filter_by(coach_id=current_user.id)
+    slot = slot_query.first_or_404()
     if slot.appointment and slot.appointment.status == "booked":
         flash("Cannot delete a slot with an active booking.", "danger")
         return redirect(url_for("coach.slots"))
@@ -183,23 +220,34 @@ def delete_slot(slot_id: int):
 @coach_bp.route("/appointments")
 @login_required
 def appointments():
-    appointments = (
-        Appointment.query.join(AvailabilitySlot)
-        .filter(AvailabilitySlot.coach_id == current_user.id)
-        .order_by(AvailabilitySlot.start_time.desc())
-        .all()
+    appointment_query = Appointment.query.join(AvailabilitySlot).order_by(
+        AvailabilitySlot.start_time.desc()
     )
-    return render_template("coach/appointments.html", appointments=appointments)
+    if not current_user.is_admin:
+        appointment_query = appointment_query.filter(
+            AvailabilitySlot.coach_id == current_user.id
+        )
+    appointments = appointment_query.all()
+    coach_lookup = {}
+    if current_user.is_admin:
+        coach_lookup = {coach.id: coach for coach in Coach.query.order_by(Coach.name).all()}
+    return render_template(
+        "coach/appointments.html",
+        appointments=appointments,
+        coach_lookup=coach_lookup,
+    )
 
 
 @coach_bp.route("/appointments/<int:appointment_id>/status", methods=["POST"])
 @login_required
 def update_appointment_status(appointment_id: int):
+    appointment_query = Appointment.query.join(AvailabilitySlot)
+    if not current_user.is_admin:
+        appointment_query = appointment_query.filter(
+            AvailabilitySlot.coach_id == current_user.id
+        )
     appointment = (
-        Appointment.query.join(AvailabilitySlot)
-        .filter(AvailabilitySlot.coach_id == current_user.id)
-        .filter(Appointment.id == appointment_id)
-        .first_or_404()
+        appointment_query.filter(Appointment.id == appointment_id).first_or_404()
     )
     status = request.form.get("status")
     if status not in {"booked", "cancelled", "completed"}:
