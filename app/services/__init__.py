@@ -1,5 +1,12 @@
-"""Service layer helpers for application features."""
+"""Service layer helpers for multi-state exam functionality."""
 
+from .progress import (
+    ProgressAccessError,
+    ProgressSummary,
+    ProgressValidationError,
+    export_state_progress_csv,
+    get_progress_summary,
+)
 from .state_management import (
     StateSwitchError,
     StateSwitchPermissionError,
@@ -10,6 +17,11 @@ from .state_management import (
 )
 
 __all__ = [
+    "ProgressAccessError",
+    "ProgressSummary",
+    "ProgressValidationError",
+    "export_state_progress_csv",
+    "get_progress_summary",
     "StateSwitchError",
     "StateSwitchPermissionError",
     "StateSwitchValidationError",
