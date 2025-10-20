@@ -9,14 +9,26 @@ from werkzeug.security import check_password_hash, generate_password_hash
 from . import db
 
 
-class Coach(UserMixin, db.Model):
+class AccountUserMixin(UserMixin):
+    """Base mixin that encodes the account type within the session id."""
+
+    def get_id(self) -> str:  # pragma: no cover - exercised via login manager
+        role = "admin" if getattr(self, "is_admin", False) else "coach"
+        return f"{role}:{self.id}"
+
+    @property
+    def is_admin(self) -> bool:
+        return False
+
+
+class Coach(AccountUserMixin, db.Model):
     __tablename__ = "coaches"
 
     id = db.Column(db.Integer, primary_key=True)
     email = db.Column(db.String(120), unique=True, nullable=False)
     password_hash = db.Column(db.String(255), nullable=False)
     name = db.Column(db.String(120), nullable=False)
-    phone = db.Column(db.String(50), nullable=False)
+    phone = db.Column(db.String(50), unique=True, nullable=False)
     city = db.Column(db.String(100), nullable=False)
     state = db.Column(db.String(10), nullable=False)
     vehicle_types = db.Column(db.String(20), nullable=False)  # comma separated AT/MT
@@ -27,6 +39,7 @@ class Coach(UserMixin, db.Model):
     )
 
     slots = db.relationship("AvailabilitySlot", back_populates="coach", cascade="all, delete-orphan")
+    admin_profile = db.relationship("Admin", back_populates="coach", uselist=False)
     students = db.relationship("Student", back_populates="coach")
 
     def set_password(self, password: str) -> None:
@@ -37,6 +50,29 @@ class Coach(UserMixin, db.Model):
 
     def vehicle_type_list(self) -> list[str]:
         return [v.strip() for v in self.vehicle_types.split(",") if v.strip()]
+
+    @property
+    def is_admin(self) -> bool:
+        return self.admin_profile is not None
+
+
+class Admin(db.Model):
+    __tablename__ = "admins"
+
+    id = db.Column(db.Integer, db.ForeignKey("coaches.id"), primary_key=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    coach = db.relationship("Coach", back_populates="admin_profile")
+
+    @property
+    def email(self) -> str:
+        return self.coach.email
+
+    def set_password(self, password: str) -> None:
+        self.coach.set_password(password)
+
+    def check_password(self, password: str) -> bool:
+        return self.coach.check_password(password)
 
 
 class Student(db.Model):
@@ -85,6 +121,12 @@ class Student(db.Model):
     )
     login_windows = db.relationship(
         "StudentLoginRateLimit", back_populates="student", cascade="all, delete-orphan"
+    )
+    variant_groups = db.relationship(
+        "VariantQuestionGroup", back_populates="student", cascade="all, delete-orphan"
+    )
+    variant_questions = db.relationship(
+        "VariantQuestion", back_populates="student", cascade="all, delete-orphan"
     )
 
     def set_password(self, password: str) -> None:
@@ -262,6 +304,44 @@ class StarredQuestion(db.Model):
     )
 
 
+class VariantQuestionGroup(db.Model):
+    __tablename__ = "variant_question_groups"
+
+    id = db.Column(db.Integer, primary_key=True)
+    student_id = db.Column(db.Integer, db.ForeignKey("students.id"), nullable=False)
+    base_question_id = db.Column(db.Integer, db.ForeignKey("questions.id"), nullable=False)
+    knowledge_point_name = db.Column(db.String(255), nullable=False)
+    knowledge_point_summary = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    student = db.relationship("Student", back_populates="variant_groups")
+    base_question = db.relationship("Question")
+    variants = db.relationship(
+        "VariantQuestion", back_populates="group", cascade="all, delete-orphan"
+    )
+
+
+class VariantQuestion(db.Model):
+    __tablename__ = "variant_questions"
+
+    id = db.Column(db.Integer, primary_key=True)
+    group_id = db.Column(
+        db.Integer, db.ForeignKey("variant_question_groups.id"), nullable=False
+    )
+    student_id = db.Column(db.Integer, db.ForeignKey("students.id"), nullable=False)
+    prompt = db.Column(db.Text, nullable=False)
+    option_a = db.Column(db.String(255), nullable=False)
+    option_b = db.Column(db.String(255), nullable=False)
+    option_c = db.Column(db.String(255), nullable=False)
+    option_d = db.Column(db.String(255), nullable=False)
+    correct_option = db.Column(db.String(1), nullable=False)
+    explanation = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    group = db.relationship("VariantQuestionGroup", back_populates="variants")
+    student = db.relationship("Student", back_populates="variant_questions")
+
+
 class MockExamPaper(db.Model):
     __tablename__ = "mock_exam_papers"
 
@@ -365,64 +445,9 @@ class Appointment(db.Model):
     student = db.relationship("Student", back_populates="bookings")
 
 
-class ExamRule(db.Model):
-    __tablename__ = "exam_rules"
-
-    state = db.Column(db.String(10), primary_key=True)
-    total_questions = db.Column(db.Integer, nullable=False)
-    pass_mark = db.Column(db.Integer, nullable=False)
-    time_limit_minutes = db.Column(db.Integer, nullable=False)
-
-
-class Question(db.Model):
-    __tablename__ = "questions"
-
-    id = db.Column(db.Integer, primary_key=True)
-    qid = db.Column(db.String(50), nullable=False)
-    prompt = db.Column(db.Text, nullable=False)
-    state_scope = db.Column(db.String(10), nullable=False, default="ALL")
-
-    __table_args__ = (
-        UniqueConstraint("qid", "state_scope", name="uq_question_qid_scope"),
-    )
-
-
-class StudentStateProgress(db.Model):
-    __tablename__ = "student_state_progress"
-
-    id = db.Column(db.Integer, primary_key=True)
-    student_id = db.Column(db.Integer, db.ForeignKey("students.id"), nullable=False)
-    state = db.Column(db.String(10), nullable=False)
-    total_attempts = db.Column(db.Integer, nullable=False, default=0)
-    best_score = db.Column(db.Integer)
-    last_active_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
-
-    student = db.relationship("Student", back_populates="state_progress")
-
-    __table_args__ = (
-        UniqueConstraint("student_id", "state", name="uq_progress_student_state"),
-    )
-
-
-class StudentExamSession(db.Model):
-    __tablename__ = "student_exam_sessions"
-
-    id = db.Column(db.Integer, primary_key=True)
-    student_id = db.Column(db.Integer, db.ForeignKey("students.id"), nullable=False)
-    state = db.Column(db.String(10), nullable=False)
-    status = db.Column(
-        Enum("ongoing", "submitted", "abandoned", name="exam_session_status"),
-        nullable=False,
-        default="ongoing",
-    )
-    started_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
-    finished_at = db.Column(db.DateTime)
-
-    student = db.relationship("Student", back_populates="exam_sessions")
-
-
 __all__ = [
     "Coach",
+    "Admin",
     "Student",
     "MockExamSummary",
     "ExamRule",
@@ -439,8 +464,4 @@ __all__ = [
     "StudentExamAnswer",
     "AvailabilitySlot",
     "Appointment",
-    "ExamRule",
-    "Question",
-    "StudentStateProgress",
-    "StudentExamSession",
 ]

@@ -8,8 +8,8 @@
     <input class="form-control" id="name" name="name" value="{{ current_user.name }}" required>
   </div>
   <div class="col-md-6">
-    <label class="form-label" for="phone">Phone</label>
-    <input class="form-control" id="phone" name="phone" value="{{ current_user.phone }}" required>
+    <label class="form-label" for="phone">Mobile Number</label>
+    <input class="form-control" id="phone" name="phone" value="{{ current_user.phone }}" placeholder="e.g. 0400111222" required>
   </div>
   <div class="col-md-6">
     <label class="form-label" for="city">City</label>
@@ -17,7 +17,15 @@
   </div>
   <div class="col-md-6">
     <label class="form-label" for="state">State</label>
-    <input class="form-control" id="state" name="state" value="{{ current_user.state }}" maxlength="10" required>
+    <select class="form-select" id="state" name="state" required>
+      <option value="">Choose…</option>
+      {% for state in state_choices %}
+      <option value="{{ state }}" {% if current_user.state == state %}selected{% endif %}>{{ state }}</option>
+      {% endfor %}
+      {% if current_user.state and current_user.state not in state_choices %}
+      <option value="{{ current_user.state }}" selected>{{ current_user.state }}</option>
+      {% endif %}
+    </select>
   </div>
   <div class="col-12">
     <span class="form-label d-block">Vehicle types</span>

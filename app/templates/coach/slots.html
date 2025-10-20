@@ -17,17 +17,35 @@
           <option value="60">60 minutes</option>
         </select>
       </div>
+      {% if current_user.is_admin %}
+      <div class="col-md-5">
+        <label class="form-label" for="coach_id">Coach</label>
+        <select class="form-select" id="coach_id" name="coach_id" required>
+          <option value="" disabled selected>Select a coach</option>
+          {% for coach in coach_choices %}
+          <option value="{{ coach.id }}">{{ coach.name }} ({{ coach.email }})</option>
+          {% endfor %}
+        </select>
+      </div>
+      {% else %}
       <div class="col-md-5">
         <label class="form-label" for="location">Meeting location</label>
         <input class="form-control" id="location" name="location" placeholder="Sydney Olympic Park" required>
       </div>
+      {% endif %}
+      {% if current_user.is_admin %}
+      <div class="col-md-12">
+        <label class="form-label" for="location">Meeting location</label>
+        <input class="form-control" id="location" name="location" placeholder="Sydney Olympic Park" required>
+      </div>
+      {% endif %}
       <div class="col-12">
         <button class="btn btn-primary" type="submit">Add slot</button>
       </div>
     </form>
   </div>
 </div>
-<h2 class="h5">Your slots</h2>
+<h2 class="h5">{{ 'All coach slots' if current_user.is_admin else 'Your slots' }}</h2>
 {% if slots %}
 <div class="table-responsive">
   <table class="table align-middle">
@@ -37,6 +55,9 @@
         <th>Duration</th>
         <th>Location</th>
         <th>Status</th>
+        {% if current_user.is_admin %}
+        <th>Coach</th>
+        {% endif %}
         <th></th>
       </tr>
     </thead>
@@ -49,6 +70,9 @@
         <td>
           <span class="badge bg-{{ 'success' if slot.status == 'available' else 'warning' if slot.status == 'booked' else 'secondary' }}">{{ slot.status|capitalize }}</span>
         </td>
+        {% if current_user.is_admin %}
+        <td>{{ slot.coach.name }}</td>
+        {% endif %}
         <td class="text-end">
           <form method="post" action="{{ url_for('coach.delete_slot', slot_id=slot.id) }}" onsubmit="return confirm('Delete this slot?');">
             <button type="submit" class="btn btn-sm btn-outline-danger" {% if slot.appointment and slot.appointment.status == 'booked' %}disabled{% endif %}>Delete</button>

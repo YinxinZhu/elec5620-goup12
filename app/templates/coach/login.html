@@ -1,15 +1,16 @@
 {% extends 'base.html' %}
-{% block title %}Coach Login{% endblock %}
+{% block title %}Coach & Admin Login{% endblock %}
 {% block content %}
 <div class="row justify-content-center">
   <div class="col-md-5">
     <div class="card shadow-sm">
       <div class="card-body">
-        <h1 class="h4 mb-3">Coach Login</h1>
+        <h1 class="h4 mb-3">Coach & Admin Login</h1>
+        <p class="text-muted small">Use your coach or administrator credentials to access the dashboard.</p>
         <form method="post">
           <div class="mb-3">
-            <label for="email" class="form-label">Email</label>
-            <input type="email" class="form-control" id="email" name="email" required>
+            <label for="mobile" class="form-label">Mobile Number</label>
+            <input type="tel" class="form-control" id="mobile" name="mobile" placeholder="e.g. 0400111222" required>
           </div>
           <div class="mb-3">
             <label for="password" class="form-label">Password</label>
