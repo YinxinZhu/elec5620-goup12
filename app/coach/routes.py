@@ -34,6 +34,17 @@ STATE_CHOICES: list[str] = [
 LANGUAGE_CHOICES: list[str] = ["ENGLISH", "CHINESE"]
 
 
+def _normalize_mobile_number(raw: str) -> str:
+    return "".join(ch for ch in (raw or "") if ch.isdigit())
+
+
+def _normalized_mobile_expression(column):
+    sanitized = column
+    for character in (" ", "-", "(", ")", "+"):
+        sanitized = func.replace(sanitized, character, "")
+    return sanitized
+
+
 def _parse_vehicle_types(values: Iterable[str]) -> str:
     allowed = {"AT", "MT"}
     cleaned = {v for v in (value.strip().upper() for value in values) if v in allowed}
@@ -82,15 +93,27 @@ def _is_safe_redirect_target(target: str | None) -> bool:
 @coach_bp.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
-        mobile_number = (request.form.get("mobile_number") or "").strip()
+        mobile_input = (request.form.get("mobile_number") or "").strip()
+        normalized_mobile = _normalize_mobile_number(mobile_input)
         password = request.form.get("password", "")
         next_url = request.args.get("next")
         if not _is_safe_redirect_target(next_url):
             next_url = None
 
         coach = None
-        if mobile_number:
-            coach = Coach.query.filter(Coach.mobile_number == mobile_number).first()
+        if normalized_mobile:
+            normalized_column = _normalized_mobile_expression(Coach.mobile_number)
+            coach = (
+                Coach.query.filter(normalized_column == normalized_mobile)
+                .order_by(Coach.id.asc())
+                .first()
+            )
+        if coach is None and mobile_input:
+            coach = (
+                Coach.query.filter(Coach.mobile_number == mobile_input)
+                .order_by(Coach.id.asc())
+                .first()
+            )
 
         if coach and coach.check_password(password):
             login_user(coach)
@@ -98,10 +121,19 @@ def login():
             return redirect(next_url or url_for("coach.dashboard"))
 
         student = None
-        if mobile_number and coach is None:
-            student = Student.query.filter(
-                Student.mobile_number == mobile_number
-            ).first()
+        if normalized_mobile and coach is None:
+            normalized_student_column = _normalized_mobile_expression(Student.mobile_number)
+            student = (
+                Student.query.filter(normalized_student_column == normalized_mobile)
+                .order_by(Student.id.asc())
+                .first()
+            )
+        if student is None and coach is None and mobile_input:
+            student = (
+                Student.query.filter(Student.mobile_number == mobile_input)
+                .order_by(Student.id.asc())
+                .first()
+            )
 
         if student and student.check_password(password):
             login_user(student)
@@ -119,7 +151,8 @@ def login():
 @coach_bp.route("/register", methods=["POST"])
 def register_student():
     name = (request.form.get("student_name") or "").strip()
-    mobile_number = (request.form.get("student_mobile_number") or "").strip()
+    mobile_input = (request.form.get("student_mobile_number") or "").strip()
+    mobile_number = _normalize_mobile_number(mobile_input)
     email = (request.form.get("student_email") or "").strip() or None
     password = request.form.get("student_password", "")
     confirm_password = request.form.get("student_confirm_password", "")
@@ -144,11 +177,21 @@ def register_student():
         flash("Please choose a supported language.", "danger")
         return redirect(url_for("coach.login"))
 
-    if Coach.query.filter(Coach.mobile_number == mobile_number).first():
+    normalized_coach_column = _normalized_mobile_expression(Coach.mobile_number)
+    if (
+        Coach.query.filter(normalized_coach_column == mobile_number)
+        .order_by(Coach.id.asc())
+        .first()
+    ):
         flash("This mobile number is already registered to a coach or administrator.", "danger")
         return redirect(url_for("coach.login"))
 
-    if Student.query.filter(Student.mobile_number == mobile_number).first():
+    normalized_student_column = _normalized_mobile_expression(Student.mobile_number)
+    if (
+        Student.query.filter(normalized_student_column == mobile_number)
+        .order_by(Student.id.asc())
+        .first()
+    ):
         flash("This mobile number is already registered to a student.", "danger")
         return redirect(url_for("coach.login"))
 
@@ -226,11 +269,23 @@ def dashboard():
 def profile():
     if request.method == "POST":
         current_user.name = request.form.get("name", current_user.name)
-        submitted_mobile = (request.form.get("mobile_number") or "").strip()
-        if not submitted_mobile:
+        submitted_mobile_raw = (request.form.get("mobile_number") or "").strip()
+        normalized_mobile = _normalize_mobile_number(submitted_mobile_raw)
+        if not normalized_mobile:
             flash("Mobile number is required.", "warning")
             return render_template("coach/profile.html", state_choices=STATE_CHOICES)
-        current_user.mobile_number = submitted_mobile
+
+        normalized_column = _normalized_mobile_expression(Coach.mobile_number)
+        duplicate_mobile = (
+            Coach.query.filter(normalized_column == normalized_mobile)
+            .filter(Coach.id != current_user.id)
+            .first()
+        )
+        if duplicate_mobile:
+            flash("Another account already uses that mobile number.", "danger")
+            return render_template("coach/profile.html", state_choices=STATE_CHOICES)
+
+        current_user.mobile_number = normalized_mobile
         current_user.city = request.form.get("city", current_user.city)
         state_choice = (request.form.get("state") or "").strip().upper()
         if state_choice not in STATE_CHOICES:
@@ -434,7 +489,8 @@ def _handle_account_creation() -> None:
         name = (request.form.get("name") or "").strip()
         email = (request.form.get("email") or "").strip().lower()
         password = request.form.get("password") or ""
-        mobile_number = (request.form.get("mobile_number") or "").strip()
+        mobile_input = (request.form.get("mobile_number") or "").strip()
+        mobile_number = _normalize_mobile_number(mobile_input)
         city = (request.form.get("city") or "").strip()
         state = (request.form.get("state") or "").strip().upper()
         if state not in STATE_CHOICES:
@@ -449,6 +505,15 @@ def _handle_account_creation() -> None:
                 "All coach/admin fields are required, including a mobile number.",
                 "warning",
             )
+            return
+
+        normalized_column = _normalized_mobile_expression(Coach.mobile_number)
+        duplicate_mobile = (
+            Coach.query.filter(normalized_column == mobile_number)
+            .first()
+        )
+        if duplicate_mobile:
+            flash("A coach or administrator already uses that mobile number.", "danger")
             return
 
         coach = Coach(
@@ -489,7 +554,8 @@ def _handle_account_creation() -> None:
     name = (request.form.get("name") or "").strip()
     email = (request.form.get("email") or "").strip().lower()
     password = request.form.get("password") or ""
-    mobile_number = _normalize_mobile(request.form.get("mobile_number") or "")
+    mobile_input = (request.form.get("mobile_number") or "").strip()
+    mobile_number = _normalize_mobile_number(mobile_input)
     state = (request.form.get("state") or "").strip().upper()
     if state not in STATE_CHOICES:
         flash("Please choose a valid state or territory.", "warning")
@@ -504,6 +570,15 @@ def _handle_account_creation() -> None:
 
     if not all([name, email, password, mobile_number, state]):
         flash("All student fields are required.", "warning")
+        return
+
+    normalized_student_column = _normalized_mobile_expression(Student.mobile_number)
+    duplicate_student = (
+        Student.query.filter(normalized_student_column == mobile_number)
+        .first()
+    )
+    if duplicate_student:
+        flash("Another student already uses that mobile number.", "danger")
         return
 
     student = Student(

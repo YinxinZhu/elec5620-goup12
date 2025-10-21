@@ -259,6 +259,16 @@ def test_student_registration_and_login(client):
     assert "Learner Dashboard" in page
 
 
+def test_coach_login_accepts_formatted_mobile(client):
+    response = client.post(
+        "/coach/login",
+        data={"mobile_number": "0400 000 001", "password": "password123"},
+        follow_redirects=True,
+    )
+    assert response.status_code == 200
+    assert "Coach Dashboard" in response.get_data(as_text=True)
+
+
 def test_student_cannot_access_staff_portal(client):
     login_response = client.post(
         "/coach/login",

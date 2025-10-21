@@ -110,8 +110,9 @@ def test_ensure_admin_support_creates_table_and_account(coach_engine):
             {"id": admin_id},
         ).one()
 
+    normalized_mobile = "".join(ch for ch in DEFAULT_ADMIN_MOBILE_NUMBER if ch.isdigit())
     assert coach_row.email == DEFAULT_ADMIN_EMAIL
-    assert coach_row.phone == DEFAULT_ADMIN_MOBILE_NUMBER
+    assert coach_row.phone == normalized_mobile
     assert coach_row.password_hash and coach_row.password_hash != "password123"
 
 
@@ -123,11 +124,12 @@ def test_ensure_admin_support_is_idempotent(coach_engine):
 
     with coach_engine.begin() as conn:
         admin_count = conn.execute(text("SELECT COUNT(*) FROM admins")).scalar_one()
+        normalized_mobile = "".join(ch for ch in DEFAULT_ADMIN_MOBILE_NUMBER if ch.isdigit())
         coach_count = conn.execute(
             text(
                 "SELECT COUNT(*) FROM coaches WHERE email = :email AND phone = :mobile"
             ),
-            {"email": DEFAULT_ADMIN_EMAIL, "mobile": DEFAULT_ADMIN_MOBILE_NUMBER},
+            {"email": DEFAULT_ADMIN_EMAIL, "mobile": normalized_mobile},
         ).scalar_one()
 
     assert admin_count == 1

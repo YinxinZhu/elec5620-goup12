@@ -12,7 +12,8 @@
     >
     <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
   </head>
-  <body>
+  <body class="{% block body_class %}{% endblock %}">
+    {% block navbar %}
     <nav class="navbar navbar-expand-lg navbar-dark bg-primary mb-4">
       <div class="container-fluid">
         {% if current_user.is_authenticated %}
@@ -58,7 +59,8 @@
         </div>
       </div>
     </nav>
-    <main class="container">
+    {% endblock %}
+    <main class="{% block main_class %}container{% endblock %}">
       {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
           <div class="mb-3">

@@ -26,11 +26,8 @@ DEFAULT_ADMIN_VEHICLE_TYPES = "AT,MT"
 DEFAULT_ADMIN_BIO = "Auto-generated administrator account with full access."
 
 
-def _normalize_mobile(raw_value: str) -> str:
-    digits = "".join(ch for ch in raw_value if ch and ch.isdigit())
-    if digits:
-        return digits
-    return (raw_value or "").strip()
+def _digits_only(value: str | None) -> str:
+    return "".join(ch for ch in (value or "") if ch.isdigit())
 
 
 def _generate_placeholder_mobile(student_id: int) -> str:
@@ -172,7 +169,7 @@ def ensure_admin_support(engine: Engine, logger: logging.Logger | None = None) -
                 coach = Coach(
                     email=DEFAULT_ADMIN_EMAIL,
                     name=DEFAULT_ADMIN_NAME,
-                    mobile_number=DEFAULT_ADMIN_MOBILE_NUMBER,
+                    mobile_number=_digits_only(DEFAULT_ADMIN_MOBILE_NUMBER),
                     city=DEFAULT_ADMIN_CITY,
                     state=DEFAULT_ADMIN_STATE,
                     vehicle_types=DEFAULT_ADMIN_VEHICLE_TYPES,
@@ -187,7 +184,7 @@ def ensure_admin_support(engine: Engine, logger: logging.Logger | None = None) -
                 session.commit()
                 return
             else:
-                coach.phone = _normalize_mobile(coach.phone or DEFAULT_ADMIN_PHONE)
+                coach.mobile_number = _digits_only(DEFAULT_ADMIN_MOBILE_NUMBER)
 
             session.add(Admin(id=coach.id, created_at=datetime.utcnow()))
             session.commit()
@@ -238,6 +235,47 @@ def ensure_coach_mobile_uniqueness(
         raise
 
 
+def normalize_account_mobile_numbers(
+    engine: Engine, logger: logging.Logger | None = None
+) -> None:
+    """Normalise stored mobile numbers to digits-only strings."""
+
+    inspector = inspect(engine)
+    tables = set(inspector.get_table_names())
+    if "coaches" not in tables and "students" not in tables:
+        return
+
+    logger = logger or logging.getLogger(__name__)
+
+    from .models import Coach, Student
+
+    try:
+        with Session(bind=engine) as session:
+            changed = False
+
+            if "coaches" in tables:
+                for coach in session.query(Coach).yield_per(50):
+                    normalized = _digits_only(coach.mobile_number)
+                    if normalized and coach.mobile_number != normalized:
+                        coach.mobile_number = normalized
+                        changed = True
+
+            if "students" in tables:
+                for student in session.query(Student).yield_per(50):
+                    normalized = _digits_only(student.mobile_number)
+                    if normalized and student.mobile_number != normalized:
+                        student.mobile_number = normalized
+                        changed = True
+
+            if changed:
+                session.commit()
+            else:
+                session.rollback()
+    except SQLAlchemyError:
+        logger.exception("Failed to normalise mobile numbers during maintenance")
+        raise
+
+
 def ensure_variant_support(engine: Engine, logger: logging.Logger | None = None) -> None:
     """Create variant question tables for upgraded deployments."""
 
@@ -277,4 +315,5 @@ def ensure_database_schema(engine: Engine, logger: logging.Logger | None = None)
     ensure_student_mobile_column(engine, logger)
     ensure_coach_mobile_uniqueness(engine, logger)
     ensure_admin_support(engine, logger)
+    normalize_account_mobile_numbers(engine, logger)
     ensure_variant_support(engine, logger)

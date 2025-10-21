@@ -1,24 +1,109 @@
 {% extends 'base.html' %}
 {% block title %}Portal Login{% endblock %}
+{% block body_class %}auth-body{% endblock %}
+{% block navbar %}{% endblock %}
+{% block main_class %}auth-container{% endblock %}
 {% block content %}
-<div class="row justify-content-center">
-  <div class="col-lg-6">
-    <div class="card shadow-sm mb-4">
-      <div class="card-body">
-        <h1 class="h4 mb-3">Account login</h1>
-        <p class="text-muted small">
-          Administrators, coaches, and students all sign in with the mobile number linked to their account.
-        </p>
-        <form method="post" novalidate>
+<div class="auth-panel">
+  <div class="auth-avatar" aria-hidden="true">👤</div>
+  <h1 class="auth-title">账号登录</h1>
+  <p class="auth-subtitle">使用绑定的手机号与密码进入教练、管理员或学员门户。</p>
+  <form method="post" novalidate>
+    <div class="mb-3">
+      <label class="form-label visually-hidden" for="mobile_number">Mobile number</label>
+      <div class="input-group">
+        <span class="input-group-text" aria-hidden="true">📱</span>
+        <input
+          type="tel"
+          class="form-control auth-input"
+          id="mobile_number"
+          name="mobile_number"
+          value="{{ request.form.get('mobile_number', '') }}"
+          placeholder="手机号"
+          required
+        >
+      </div>
+    </div>
+    <div class="mb-4">
+      <label class="form-label visually-hidden" for="password">Password</label>
+      <div class="input-group">
+        <span class="input-group-text" aria-hidden="true">🔒</span>
+        <input
+          type="password"
+          class="form-control auth-input"
+          id="password"
+          name="password"
+          placeholder="登录密码"
+          required
+        >
+      </div>
+    </div>
+    <div class="d-flex align-items-center">
+      <button type="submit" class="btn btn-primary flex-grow-1 auth-login-button">登录</button>
+      <button
+        type="button"
+        class="btn btn-link auth-register-link ms-3"
+        data-bs-toggle="modal"
+        data-bs-target="#studentRegistrationModal"
+      >立即注册</button>
+    </div>
+  </form>
+</div>
+
+<div class="modal fade auth-modal" id="studentRegistrationModal" tabindex="-1" aria-labelledby="studentRegistrationLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 class="h5 modal-title" id="studentRegistrationLabel">学生账号注册</h2>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <p class="text-muted small">填写以下信息即可开通学员账号，注册完成后将自动登录学员门户。</p>
+        <form method="post" action="{{ url_for('coach.register_student') }}" novalidate>
           <div class="mb-3">
-            <label for="mobile_number" class="form-label">Mobile number</label>
-            <input type="tel" class="form-control" id="mobile_number" name="mobile_number" value="{{ request.form.get('mobile_number', '') }}" required>
+            <label for="student_name" class="form-label">姓名</label>
+            <input type="text" class="form-control" id="student_name" name="student_name" required>
           </div>
           <div class="mb-3">
-            <label for="password" class="form-label">Password</label>
-            <input type="password" class="form-control" id="password" name="password" required>
+            <label for="student_mobile_number" class="form-label">手机号</label>
+            <input type="tel" class="form-control" id="student_mobile_number" name="student_mobile_number" required>
           </div>
-          <button type="submit" class="btn btn-primary w-100">Login</button>
+          <div class="mb-3">
+            <label for="student_email" class="form-label">邮箱 <span class="text-muted">(可选)</span></label>
+            <input type="email" class="form-control" id="student_email" name="student_email" placeholder="name@example.com">
+          </div>
+          <div class="row g-3">
+            <div class="col-sm-6">
+              <label for="student_state" class="form-label">州/领地</label>
+              <select class="form-select" id="student_state" name="student_state" required>
+                <option value="" disabled selected>请选择</option>
+                {% for state in state_choices %}
+                <option value="{{ state }}">{{ state }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-sm-6">
+              <label for="student_preferred_language" class="form-label">首选语言</label>
+              <select class="form-select" id="student_preferred_language" name="student_preferred_language">
+                {% for lang in language_choices %}
+                <option value="{{ lang }}">{{ lang.title() }}</option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+          <div class="row g-3 mt-1">
+            <div class="col-sm-6">
+              <label for="student_password" class="form-label">密码</label>
+              <input type="password" class="form-control" id="student_password" name="student_password" required>
+            </div>
+            <div class="col-sm-6">
+              <label for="student_confirm_password" class="form-label">确认密码</label>
+              <input type="password" class="form-control" id="student_confirm_password" name="student_confirm_password" required>
+            </div>
+          </div>
+          <div class="d-flex justify-content-end mt-4">
+            <button type="submit" class="btn btn-primary">提交注册</button>
+          </div>
         </form>
       </div>
     </div>
