@@ -88,6 +88,10 @@ learner self-registration form directly beneath the login action.
   learner dashboard immediately after a successful submission.
 - All session flash messages and form labels are presented in English so the web
   experience is consistent across roles.
+- Use the language switcher in the top navigation (or login header) to toggle
+  between English and Chinese. The selection is saved to the active student's
+  profile instantly and the session preference is cleared on logout so each
+  account starts with its own default language.
 
 ## Demo credentials
 
