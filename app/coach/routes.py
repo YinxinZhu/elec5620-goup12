@@ -41,7 +41,7 @@ def _normalize_mobile_number(raw: str) -> str:
 def _normalized_mobile_expression(column):
     sanitized = column
     for character in (" ", "-", "(", ")", "+"):
-        sanitized = func.replace(sanitized, character, "")
+        sanitized = db.func.replace(sanitized, character, "")
     return sanitized
 
 
