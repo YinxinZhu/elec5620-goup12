@@ -6,8 +6,8 @@
 {% block content %}
 <div class="auth-panel">
   <div class="auth-avatar" aria-hidden="true">👤</div>
-  <h1 class="auth-title">账号登录</h1>
-  <p class="auth-subtitle">使用绑定的手机号与密码进入教练、管理员或学员门户。</p>
+  <h1 class="auth-title">Sign in to the portal</h1>
+  <p class="auth-subtitle">Use your registered mobile number and password to access the administrator, coach, or learner experience.</p>
   <form method="post" novalidate>
     <div class="mb-3">
       <label class="form-label visually-hidden" for="mobile_number">Mobile number</label>
@@ -19,7 +19,7 @@
           id="mobile_number"
           name="mobile_number"
           value="{{ request.form.get('mobile_number', '') }}"
-          placeholder="手机号"
+          placeholder="Mobile number"
           required
         >
       </div>
@@ -33,19 +33,19 @@
           class="form-control auth-input"
           id="password"
           name="password"
-          placeholder="登录密码"
+          placeholder="Password"
           required
         >
       </div>
     </div>
     <div class="d-flex align-items-center">
-      <button type="submit" class="btn btn-primary flex-grow-1 auth-login-button">登录</button>
+      <button type="submit" class="btn btn-primary flex-grow-1 auth-login-button">Sign in</button>
       <button
         type="button"
         class="btn btn-link auth-register-link ms-3"
         data-bs-toggle="modal"
         data-bs-target="#studentRegistrationModal"
-      >立即注册</button>
+      >Register learner account</button>
     </div>
   </form>
 </div>
@@ -54,36 +54,36 @@
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content">
       <div class="modal-header">
-        <h2 class="h5 modal-title" id="studentRegistrationLabel">学生账号注册</h2>
+        <h2 class="h5 modal-title" id="studentRegistrationLabel">Register a learner account</h2>
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
       <div class="modal-body">
-        <p class="text-muted small">填写以下信息即可开通学员账号，注册完成后将自动登录学员门户。</p>
+        <p class="text-muted small">Complete the form below to create a learner account. After registration we will sign you in automatically.</p>
         <form method="post" action="{{ url_for('coach.register_student') }}" novalidate>
           <div class="mb-3">
-            <label for="student_name" class="form-label">姓名</label>
+            <label for="student_name" class="form-label">Full name</label>
             <input type="text" class="form-control" id="student_name" name="student_name" required>
           </div>
           <div class="mb-3">
-            <label for="student_mobile_number" class="form-label">手机号</label>
+            <label for="student_mobile_number" class="form-label">Mobile number</label>
             <input type="tel" class="form-control" id="student_mobile_number" name="student_mobile_number" required>
           </div>
           <div class="mb-3">
-            <label for="student_email" class="form-label">邮箱 <span class="text-muted">(可选)</span></label>
+            <label for="student_email" class="form-label">Email <span class="text-muted">(optional)</span></label>
             <input type="email" class="form-control" id="student_email" name="student_email" placeholder="name@example.com">
           </div>
           <div class="row g-3">
             <div class="col-sm-6">
-              <label for="student_state" class="form-label">州/领地</label>
+              <label for="student_state" class="form-label">State or territory</label>
               <select class="form-select" id="student_state" name="student_state" required>
-                <option value="" disabled selected>请选择</option>
+                <option value="" disabled selected>Select your state</option>
                 {% for state in state_choices %}
                 <option value="{{ state }}">{{ state }}</option>
                 {% endfor %}
               </select>
             </div>
             <div class="col-sm-6">
-              <label for="student_preferred_language" class="form-label">首选语言</label>
+              <label for="student_preferred_language" class="form-label">Preferred language</label>
               <select class="form-select" id="student_preferred_language" name="student_preferred_language">
                 {% for lang in language_choices %}
                 <option value="{{ lang }}">{{ lang.title() }}</option>
@@ -93,66 +93,17 @@
           </div>
           <div class="row g-3 mt-1">
             <div class="col-sm-6">
-              <label for="student_password" class="form-label">密码</label>
-              <input type="password" class="form-control" id="student_password" name="student_password" required>
-            </div>
-            <div class="col-sm-6">
-              <label for="student_confirm_password" class="form-label">确认密码</label>
-              <input type="password" class="form-control" id="student_confirm_password" name="student_confirm_password" required>
-            </div>
-          </div>
-          <div class="d-flex justify-content-end mt-4">
-            <button type="submit" class="btn btn-primary">提交注册</button>
-          </div>
-        </form>
-      </div>
-    </div>
-    <div class="card border-0 shadow-sm">
-      <div class="card-body">
-        <h2 class="h5 mb-3">New student? Create an account</h2>
-        <p class="text-muted small">Register below to access the learner portal directly from the web.</p>
-        <form method="post" action="{{ url_for('coach.register_student') }}" novalidate>
-          <div class="row g-3">
-            <div class="col-md-6">
-              <label for="student_name" class="form-label">Full name</label>
-              <input type="text" class="form-control" id="student_name" name="student_name" required>
-            </div>
-            <div class="col-md-6">
-              <label for="student_email" class="form-label">Email <span class="text-muted">(optional)</span></label>
-              <input type="email" class="form-control" id="student_email" name="student_email" placeholder="name@example.com">
-            </div>
-            <div class="col-md-6">
-              <label for="student_mobile_number" class="form-label">Mobile number</label>
-              <input type="tel" class="form-control" id="student_mobile_number" name="student_mobile_number" required>
-            </div>
-            <div class="col-md-6">
-              <label for="student_state" class="form-label">State or territory</label>
-              <select class="form-select" id="student_state" name="student_state" required>
-                <option value="" selected disabled>Choose...</option>
-                {% for state in state_choices %}
-                <option value="{{ state }}">{{ state }}</option>
-                {% endfor %}
-              </select>
-            </div>
-            <div class="col-md-6">
-              <label for="student_preferred_language" class="form-label">Preferred language</label>
-              <select class="form-select" id="student_preferred_language" name="student_preferred_language">
-                {% for lang in language_choices %}
-                <option value="{{ lang }}">{{ lang.title() }}</option>
-                {% endfor %}
-              </select>
-            </div>
-            <div class="col-md-6"></div>
-            <div class="col-md-6">
               <label for="student_password" class="form-label">Password</label>
               <input type="password" class="form-control" id="student_password" name="student_password" required>
             </div>
-            <div class="col-md-6">
+            <div class="col-sm-6">
               <label for="student_confirm_password" class="form-label">Confirm password</label>
               <input type="password" class="form-control" id="student_confirm_password" name="student_confirm_password" required>
             </div>
           </div>
-          <button type="submit" class="btn btn-outline-primary w-100 mt-4">Register and start learning</button>
+          <div class="d-flex justify-content-end mt-4">
+            <button type="submit" class="btn btn-primary">Submit registration</button>
+          </div>
         </form>
       </div>
     </div>

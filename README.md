@@ -1,9 +1,9 @@
-# Learner Practice Portal (Coach & Admin Module)
+# Learner Practice Portal (Unified Web Experience)
 
-This repository powers the coach and administrator experience for a learner
-driver training platform. It is built with Flask, SQLAlchemy, Bootstrap, and a
-pytest-backed test suite. In addition to the coaching flows, the API surface for
-the student app covers:
+This repository powers the unified administrator, coach, and learner web
+experience for a driver training platform. It is built with Flask, SQLAlchemy,
+Bootstrap, and a pytest-backed test suite. In addition to the coaching flows,
+the API surface for the student app covers:
 
 - **Question bank practice (AH-01)** – Browse questions by state/topic,
   attempt single-choice items, receive instant feedback with explanations,
@@ -21,9 +21,9 @@ the student app covers:
   removal controls.
 
 Administrators inherit every coach ability and add platform-wide personnel
-management for creating accounts and resetting passwords across roles. Coaches
-and students authenticate against the same Flask app, with the mobile clients
-consuming the JSON endpoints described below.
+management for creating accounts and resetting passwords across roles. The same
+web portal now authenticates every role with a mobile number and surfaces a
+learner self-registration form directly beneath the login action.
 
 ## Prerequisites
 
@@ -76,24 +76,35 @@ consuming the JSON endpoints described below.
    ```bash
    flask --app app run --debug
    ```
-   The coach/admin UI is available at http://127.0.0.1:5000/.
+   The unified web portal is available at http://127.0.0.1:5000/coach/login and
+   serves administrators, coaches, and students from the same entry point.
+
+### Portal usage overview
+
+- Sign in with the mobile number associated with the account (staff and learners
+  share the same form).
+- The "Register learner account" link at the bottom-right of the sign-in card
+  opens a modal where new students can self-register; the app logs them into the
+  learner dashboard immediately after a successful submission.
+- All session flash messages and form labels are presented in English so the web
+  experience is consistent across roles.
 
 ## Demo credentials
 
-`seed-demo` provisions the following accounts for quick manual testing. All web
-logins use **mobile number + password**, while the student mobile app/API also
-authenticates with the same pair:
+`seed-demo` provisions the following accounts for quick manual testing (all
+roles authenticate with their mobile number):
 
-| Role          | Mobile       | Email               | Password     |
-| ------------- | ------------ | ------------------- | ------------ |
-| Administrator | `0400999000` | `admin@example.com` | `password123`|
-| Coach         | `0400111222` | `coach@example.com` | `password123`|
-| Students      | `0400000100` | `jamie@example.com` | `password123`|
-|               | `0400000101` | `priya@example.com` | `password123`|
-|               | `0400000102` | `morgan@example.com`| `password123`|
+| Role          | Mobile (login) | Email               | Password     |
+| ------------- | -------------- | ------------------- | ------------ |
+| Administrator | `0400999000`   | `admin@example.com` | `password123`|
+| Coach         | `0400111222`   | `coach@example.com` | `password123`|
+| Students      | `0400000100`   | `jamie@example.com` | `password123`|
+|               | `0400000101`   | `priya@example.com` | `password123`|
+|               | `0400000102`   | `morgan@example.com`| `password123`|
 
 Administrators access all coach pages plus `/coach/personnel` for cross-role
-account provisioning and password resets.
+account provisioning and password resets, while students are redirected to the
+learner dashboard after signing in or registering.
 
 ## Feature walkthrough
 
