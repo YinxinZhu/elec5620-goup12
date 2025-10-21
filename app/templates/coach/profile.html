@@ -2,49 +2,79 @@
 {% block title %}My Profile{% endblock %}
 {% block content %}
 <h1 class="h3 mb-4">My Profile</h1>
-<form method="post" class="row g-3">
-  <div class="col-md-6">
-    <label class="form-label" for="name">Name</label>
-    <input class="form-control" id="name" name="name" value="{{ current_user.name }}" required>
-  </div>
-  <div class="col-md-6">
-    <label class="form-label" for="mobile_number">Mobile number</label>
-    <input type="tel" class="form-control" id="mobile_number" name="mobile_number" value="{{ current_user.mobile_number }}" required>
-  </div>
-  <div class="col-md-6">
-    <label class="form-label" for="city">City</label>
-    <input class="form-control" id="city" name="city" value="{{ current_user.city }}" required>
-  </div>
-  <div class="col-md-6">
-    <label class="form-label" for="state">State</label>
-    <select class="form-select" id="state" name="state" required>
-      <option value="">Choose…</option>
-      {% for state in state_choices %}
-      <option value="{{ state }}" {% if current_user.state == state %}selected{% endif %}>{{ state }}</option>
-      {% endfor %}
-      {% if current_user.state and current_user.state not in state_choices %}
-      <option value="{{ current_user.state }}" selected>{{ current_user.state }}</option>
-      {% endif %}
-    </select>
-  </div>
-  <div class="col-12">
-    <span class="form-label d-block">Vehicle types</span>
-    {% set selected = current_user.vehicle_type_list() %}
-    <div class="form-check form-check-inline">
-      <input class="form-check-input" type="checkbox" id="vehicleAT" name="vehicle_types" value="AT" {% if 'AT' in selected %}checked{% endif %}>
-      <label class="form-check-label" for="vehicleAT">Automatic (AT)</label>
+<div class="row g-4">
+  <div class="col-lg-8">
+    <div class="card shadow-sm">
+      <div class="card-header bg-white">
+        <h2 class="h5 mb-0">Account details</h2>
+      </div>
+      <div class="card-body">
+        <form method="post" class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label" for="name">Name</label>
+            <input class="form-control" id="name" name="name" value="{{ current_user.name }}" required>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label" for="mobile_number">Mobile number</label>
+            <input type="tel" class="form-control" id="mobile_number" name="mobile_number" value="{{ current_user.mobile_number }}" required>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label" for="city">City</label>
+            <input class="form-control" id="city" name="city" value="{{ current_user.city }}" required>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label" for="state">State</label>
+            <select class="form-select" id="state" name="state" required>
+              <option value="">Choose…</option>
+              {% for state in state_choices %}
+              <option value="{{ state }}" {% if current_user.state == state %}selected{% endif %}>{{ state }}</option>
+              {% endfor %}
+              {% if current_user.state and current_user.state not in state_choices %}
+              <option value="{{ current_user.state }}" selected>{{ current_user.state }}</option>
+              {% endif %}
+            </select>
+          </div>
+          <div class="col-12">
+            <span class="form-label d-block">Transmission type</span>
+            {% set selected = current_user.vehicle_type %}
+            <div class="form-check form-check-inline">
+              <input class="form-check-input" type="radio" id="vehicleAT" name="vehicle_type" value="AT" {% if selected == 'AT' %}checked{% endif %} required>
+              <label class="form-check-label" for="vehicleAT">Automatic (AT)</label>
+            </div>
+            <div class="form-check form-check-inline">
+              <input class="form-check-input" type="radio" id="vehicleMT" name="vehicle_type" value="MT" {% if selected == 'MT' %}checked{% endif %} required>
+              <label class="form-check-label" for="vehicleMT">Manual (MT)</label>
+            </div>
+          </div>
+          <div class="col-12">
+            <label class="form-label" for="bio">About you</label>
+            <textarea class="form-control" id="bio" name="bio" rows="4">{{ current_user.bio }}</textarea>
+          </div>
+          <div class="col-12">
+            <button class="btn btn-primary" type="submit">Save changes</button>
+          </div>
+        </form>
+      </div>
     </div>
-    <div class="form-check form-check-inline">
-      <input class="form-check-input" type="checkbox" id="vehicleMT" name="vehicle_types" value="MT" {% if 'MT' in selected %}checked{% endif %}>
-      <label class="form-check-label" for="vehicleMT">Manual (MT)</label>
+  </div>
+  <div class="col-lg-4">
+    <div class="card shadow-sm h-100">
+      <div class="card-header bg-white">
+        <h2 class="h6 mb-0">Interface language</h2>
+      </div>
+      <div class="card-body">
+        <p class="text-muted small">Update the language for this browser session.</p>
+        <form method="post" action="{{ url_for('switch_language') }}" class="d-grid gap-2">
+          <input type="hidden" name="next" value="{{ request.full_path }}">
+          <select class="form-select" name="language" aria-label="Switch interface language">
+            {% for option in language_choices %}
+            <option value="{{ option.code }}"{% if option.code == active_language %} selected{% endif %}>{{ option.label }}</option>
+            {% endfor %}
+          </select>
+          <button type="submit" class="btn btn-outline-primary">Apply language</button>
+        </form>
+      </div>
     </div>
   </div>
-  <div class="col-12">
-    <label class="form-label" for="bio">About you</label>
-    <textarea class="form-control" id="bio" name="bio" rows="4">{{ current_user.bio }}</textarea>
-  </div>
-  <div class="col-12">
-    <button class="btn btn-primary" type="submit">Save changes</button>
-  </div>
-</form>
+</div>
 {% endblock %}

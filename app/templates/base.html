@@ -32,12 +32,14 @@
             {% if current_user.is_authenticated %}
               {% if is_student %}
               <li class="nav-item"><a class="nav-link" href="{{ url_for('student.dashboard') }}">{{ _('Dashboard') }}</a></li>
+              <li class="nav-item"><a class="nav-link" href="{{ url_for('student.exams') }}">{{ _('Exam centre') }}</a></li>
               <li class="nav-item"><a class="nav-link" href="{{ url_for('student.profile') }}">{{ _('Profile') }}</a></li>
               {% else %}
               <li class="nav-item"><a class="nav-link" href="{{ url_for('coach.dashboard') }}">{{ _('Dashboard') }}</a></li>
               <li class="nav-item"><a class="nav-link" href="{{ url_for('coach.slots') }}">{{ _('Availability') }}</a></li>
               <li class="nav-item"><a class="nav-link" href="{{ url_for('coach.appointments') }}">{{ _('Appointments') }}</a></li>
               <li class="nav-item"><a class="nav-link" href="{{ url_for('coach.students') }}">{{ _('Students') }}</a></li>
+              <li class="nav-item"><a class="nav-link" href="{{ url_for('coach.exams') }}">{{ _('Exams') }}</a></li>
               {% if current_user.is_admin %}
               <li class="nav-item"><a class="nav-link" href="{{ url_for('coach.personnel') }}">{{ _('Personnel') }}</a></li>
               {% endif %}
@@ -46,36 +48,6 @@
             {% endif %}
           </ul>
           <ul class="navbar-nav ms-auto align-items-center gap-3">
-            <li class="nav-item">
-              <form method="post" action="{{ url_for('switch_language') }}" class="language-switcher d-flex align-items-center">
-                <input type="hidden" name="next" value="{{ request.full_path }}">
-                <div class="dropdown">
-                  <button
-                    class="btn btn-light btn-sm dropdown-toggle language-toggle"
-                    type="button"
-                    id="languageDropdown"
-                    data-bs-toggle="dropdown"
-                    aria-expanded="false"
-                  >
-                    {{ language_label(active_language) }}
-                  </button>
-                  <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="languageDropdown">
-                    {% for option in language_choices %}
-                    <li>
-                      <button
-                        class="dropdown-item{% if option.code == active_language %} active{% endif %}"
-                        type="submit"
-                        name="language"
-                        value="{{ option.code }}"
-                      >
-                        {{ option.icon }} {{ option.label }}
-                      </button>
-                    </li>
-                    {% endfor %}
-                  </ul>
-                </div>
-              </form>
-            </li>
             {% if current_user.is_authenticated %}
             <li class="nav-item d-flex align-items-center gap-2">
               <span class="navbar-text">{{ _('Hi') }}, {{ current_user.name }}</span>

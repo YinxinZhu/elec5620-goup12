@@ -88,6 +88,54 @@ learner self-registration form directly beneath the login action.
   learner dashboard immediately after a successful submission.
 - All session flash messages and form labels are presented in English so the web
   experience is consistent across roles.
+- Choose the preferred interface language from the login card or profile
+  settings. The selection is saved to the active student's profile instantly and
+  the session preference is cleared on logout so each account starts with its
+  own default language.
+
+### Exam management & learner practice
+
+- Coaches (and administrators) have a new **Exams** workspace that surfaces
+  published papers and provides a guided form for building new timed exams.
+  Choose between manual question selection or automatic sampling by topic.
+- Upload a complete question bank in bulk via the Excel importer. Matching QIDs
+  are updated in-place so corrections can be re-uploaded without duplicate
+  records.
+- Students gain an **Exam centre** hub with two entry points: resume or start
+  coach-issued papers aligned to their currently selected state, and launch a
+  self-practice set that pulls random questions from the state bank plus
+  nationally shared items.
+- During an exam the learner receives a compact navigator, countdown timer, and
+  a structured review view with pagination (five questions per page) that can be
+  filtered to show only incorrect answers. Timed sessions are persisted so
+  refreshes do not lose progress.
+- Question banks and exam papers respect state boundaries: uploading questions
+  or building papers captures the state scope, and students only see the
+  variants targeted to their chosen jurisdiction.
+
+#### Question bank Excel template
+
+The importer accepts `.xlsx` workbooks with the following header names (English
+or the paired Chinese equivalent). Columns marked as required must contain a
+value for every row.
+
+| Header (EN / 中文)     | Field               | Required | Notes |
+| --------------------- | ------------------- | -------- | ----- |
+| `QID` / `题目编号`     | External question ID| No       | When supplied, updates the matching record instead of creating a new one. |
+| `Prompt` / `题干`      | Question stem       | **Yes**  | Supports rich text copied from Word/Excel. |
+| `Option A` / `选项A`   | Answer option A     | **Yes**  | Text shown beside the `A` radio button. |
+| `Option B` / `选项B`   | Answer option B     | **Yes**  | |
+| `Option C` / `选项C`   | Answer option C     | **Yes**  | |
+| `Option D` / `选项D`   | Answer option D     | **Yes**  | |
+| `Correct Option` / `答案` | Correct letter (A–D) | **Yes** | Only the letter is required; the portal displays the matching option text. |
+| `Topic` / `考点类型`   | Knowledge point     | No       | Defaults to `general` when omitted. |
+| `Explanation` / `解析` | Rationale shown after grading | No | Ideal for remediation and practice mode. |
+| `State Scope` / `适用州` | State/territory code | No | Uses the upload form's default (or `ALL`) if blank. |
+| `Language` / `语言`    | Content language    | No       | Defaults to `ENGLISH`. |
+| `Image URL` / `配图`   | Optional illustration | No    | Rendered alongside the prompt when present. |
+
+> Tip: download the example template (see `/coach/exams`) and replace the
+> placeholder rows to guarantee column order.
 
 ## Demo credentials
 

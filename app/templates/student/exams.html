@@ -1,0 +1,90 @@
+{% extends 'base.html' %}
+{% block title %}{{ _('Exam Centre') }}{% endblock %}
+{% block content %}
+<div class="row g-4 exam-centre">
+  <div class="col-lg-8">
+    <div class="d-flex align-items-center justify-content-between mb-3">
+      <div>
+        <h1 class="h3 mb-1">{{ _('Exam Centre') }}</h1>
+        <p class="text-muted mb-0">
+          {{ _('Choose a published paper or continue an in-progress exam.') }}
+        </p>
+        <p class="text-muted small mb-0">
+          {{ _('Showing exam papers for state {state_code}. Questions marked "ALL" are shared nationally.').format(state_code=state) }}
+        </p>
+      </div>
+      {% if active_session %}
+      <div class="badge bg-success-subtle text-success px-3 py-2">
+        {{ _('Exam in progress') }}
+      </div>
+      {% endif %}
+    </div>
+    {% if active_session %}
+    <div class="card border-success mb-4 shadow-sm">
+      <div class="card-body d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3">
+        <div>
+          <h2 class="h5 mb-1">{{ _('Active session') }}</h2>
+          <p class="text-muted mb-0">
+            {{ _('Paper ID') }} #{{ active_session.paper_id }} · {{ _('Started') }} {{ active_session.started_at.strftime('%Y-%m-%d %H:%M') }}
+          </p>
+        </div>
+        <a class="btn btn-outline-success" href="{{ url_for('student.exam_session', session_id=active_session.id) }}">{{ _('Resume exam') }}</a>
+      </div>
+    </div>
+    {% endif %}
+    <div class="row g-3">
+      {% for paper in papers %}
+      <div class="col-sm-6">
+        <div class="card h-100 shadow-sm exam-paper-card">
+          <div class="card-body d-flex flex-column">
+            <h3 class="h5 mb-2">{{ paper.title }}</h3>
+            <p class="text-muted mb-3">{{ _('Time limit') }}: {{ paper.time_limit_minutes }} {{ _('minutes') }}</p>
+            <div class="d-flex align-items-center justify-content-between mt-auto">
+              <div class="text-muted small">
+                {{ _('Questions') }}: {{ paper.questions|length }}
+              </div>
+              <form method="post" action="{{ url_for('student.start_exam', paper_id=paper.id) }}">
+                <button type="submit" class="btn btn-primary btn-sm">{{ _('Start exam') }}</button>
+              </form>
+            </div>
+          </div>
+        </div>
+      </div>
+      {% else %}
+      <div class="col-12">
+        <div class="alert alert-info">{{ _('No exam papers have been published for your state yet.') }}</div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  <div class="col-lg-4">
+    <div class="card shadow-sm h-100">
+      <div class="card-header bg-white">
+        <h2 class="h5 mb-0">{{ _('Self practice') }}</h2>
+      </div>
+      <div class="card-body">
+        <p class="text-muted">{{ _('Generate a personalised practice set using questions from your state bank plus any nationally shared items.') }}</p>
+        <form method="post" action="{{ url_for('student.practice') }}" class="practice-form">
+          <div class="mb-3">
+            <label class="form-label" for="question_count">{{ _('Number of questions') }}</label>
+            <input type="number" class="form-control" id="question_count" name="question_count" value="{{ practice_default }}" min="1" max="{{ practice_max }}" required>
+            <div class="form-text">{{ _('Maximum') }} {{ practice_max }}</div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label" for="topic">{{ _('Focus topic (optional)') }}</label>
+            <select class="form-select" id="topic" name="topic">
+              <option value="">{{ _('All topics') }}</option>
+              {% for topic in topics %}
+              <option value="{{ topic }}">{{ topic }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <button type="submit" class="btn btn-outline-primary w-100">{{ _('Start practice') }}</button>
+        </form>
+        <hr>
+        <p class="small text-muted mb-0">{{ _('Practice draws questions randomly. Re-run to refresh your set at any time.') }}</p>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
