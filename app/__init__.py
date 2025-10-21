@@ -37,30 +37,35 @@ def create_app(config_class: type[Config] | None = None) -> Flask:
     migrate.init_app(app, db)
     login_manager.init_app(app)
 
-    from .models import Coach
+    from .models import Coach, Student
 
     @login_manager.user_loader
-    def load_user(user_id: str) -> Coach | None:
+    def load_user(user_id: str) -> Coach | Student | None:
         try:
             role, raw_id = user_id.split(":", 1)
             identity = int(raw_id)
         except (ValueError, TypeError):
             return None
 
-        user = db.session.get(Coach, identity)
-        if not user:
-            return None
+        if role in {"coach", "admin"}:
+            user = db.session.get(Coach, identity)
+            if not user:
+                return None
+            if role == "admin" and not user.is_admin:
+                return None
+            return user
 
-        if role == "admin" and not user.is_admin:
-            return None
-        if role not in {"coach", "admin"}:
-            return None
-        return user
+        if role == "student":
+            return db.session.get(Student, identity)
+
+        return None
 
     from .coach.routes import coach_bp
+    from .student.routes import student_bp
     from .api import api_bp
 
     app.register_blueprint(coach_bp)
+    app.register_blueprint(student_bp)
     app.register_blueprint(api_bp)
 
     @app.route("/")
