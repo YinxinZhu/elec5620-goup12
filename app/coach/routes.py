@@ -31,6 +31,8 @@ STATE_CHOICES: list[str] = [
     "WA",
 ]
 
+LANGUAGE_CHOICES: list[str] = ["ENGLISH", "CHINESE"]
+
 
 def _parse_vehicle_types(values: Iterable[str]) -> str:
     allowed = {"AT", "MT"}
@@ -51,6 +53,22 @@ def _require_admin_access():
         return redirect(url_for("coach.dashboard"))
     return None
 
+
+@coach_bp.before_app_request
+def _restrict_student_portal_access():
+    if request.blueprint != "coach":
+        return None
+    if request.endpoint in {"coach.login", "coach.register_student", "coach.logout"}:
+        return None
+    if request.endpoint is None:
+        return None
+    if not current_user.is_authenticated:
+        return None
+    if getattr(current_user, "is_student", False):
+        flash("Student accounts should use the learner portal.", "warning")
+        return redirect(url_for("student.dashboard"))
+    return None
+
 def _is_safe_redirect_target(target: str | None) -> bool:
     if not target:
         return False
@@ -64,22 +82,100 @@ def _is_safe_redirect_target(target: str | None) -> bool:
 @coach_bp.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
-        mobile = _normalize_mobile(request.form.get("mobile", ""))
+        mobile_number = (request.form.get("mobile_number") or "").strip()
         password = request.form.get("password", "")
-        if not mobile or not password:
-            flash("Mobile number and password are required.", "danger")
-            return render_template("coach/login.html")
+        next_url = request.args.get("next")
+        if not _is_safe_redirect_target(next_url):
+            next_url = None
 
-        coach = Coach.query.filter(Coach.phone == mobile).first()
+        coach = None
+        if mobile_number:
+            coach = Coach.query.filter(Coach.mobile_number == mobile_number).first()
+
         if coach and coach.check_password(password):
             login_user(coach)
             flash("Welcome back!", "success")
-            next_url = request.args.get("next")
-            if not _is_safe_redirect_target(next_url):
-                next_url = None
             return redirect(next_url or url_for("coach.dashboard"))
+
+        student = None
+        if mobile_number and coach is None:
+            student = Student.query.filter(
+                Student.mobile_number == mobile_number
+            ).first()
+
+        if student and student.check_password(password):
+            login_user(student)
+            flash("Welcome back!", "success")
+            return redirect(next_url or url_for("student.dashboard"))
+
         flash("Invalid mobile number or password", "danger")
-    return render_template("coach/login.html")
+    return render_template(
+        "coach/login.html",
+        state_choices=STATE_CHOICES,
+        language_choices=LANGUAGE_CHOICES,
+    )
+
+
+@coach_bp.route("/register", methods=["POST"])
+def register_student():
+    name = (request.form.get("student_name") or "").strip()
+    mobile_number = (request.form.get("student_mobile_number") or "").strip()
+    email = (request.form.get("student_email") or "").strip() or None
+    password = request.form.get("student_password", "")
+    confirm_password = request.form.get("student_confirm_password", "")
+    state_choice = (request.form.get("student_state") or "").strip().upper()
+    preferred_language = (
+        (request.form.get("student_preferred_language") or "ENGLISH").strip().upper()
+    )
+
+    if not name or not mobile_number or not password:
+        flash("Name, mobile number, and password are required to register.", "danger")
+        return redirect(url_for("coach.login"))
+
+    if password != confirm_password:
+        flash("Passwords do not match.", "danger")
+        return redirect(url_for("coach.login"))
+
+    if state_choice not in STATE_CHOICES:
+        flash("Please select a valid state or territory.", "danger")
+        return redirect(url_for("coach.login"))
+
+    if preferred_language not in LANGUAGE_CHOICES:
+        flash("Please choose a supported language.", "danger")
+        return redirect(url_for("coach.login"))
+
+    if Coach.query.filter(Coach.mobile_number == mobile_number).first():
+        flash("This mobile number is already registered to a coach or administrator.", "danger")
+        return redirect(url_for("coach.login"))
+
+    if Student.query.filter(Student.mobile_number == mobile_number).first():
+        flash("This mobile number is already registered to a student.", "danger")
+        return redirect(url_for("coach.login"))
+
+    if email and Student.query.filter(Student.email == email).first():
+        flash("This email is already registered to a student.", "danger")
+        return redirect(url_for("coach.login"))
+
+    student = Student(
+        name=name,
+        mobile_number=mobile_number,
+        email=email,
+        state=state_choice,
+        preferred_language=preferred_language,
+    )
+    student.set_password(password)
+    db.session.add(student)
+
+    try:
+        db.session.commit()
+    except IntegrityError:
+        db.session.rollback()
+        flash("Unable to register with the provided details. Please try again.", "danger")
+        return redirect(url_for("coach.login"))
+
+    login_user(student)
+    flash("Student account created successfully!", "success")
+    return redirect(url_for("student.dashboard"))
 
 
 @coach_bp.route("/logout")
@@ -130,12 +226,11 @@ def dashboard():
 def profile():
     if request.method == "POST":
         current_user.name = request.form.get("name", current_user.name)
-        phone_input = request.form.get("phone", "").strip()
-        normalized_phone = _normalize_mobile(phone_input)
-        if not normalized_phone:
-            flash("Please provide a valid mobile number.", "warning")
+        submitted_mobile = (request.form.get("mobile_number") or "").strip()
+        if not submitted_mobile:
+            flash("Mobile number is required.", "warning")
             return render_template("coach/profile.html", state_choices=STATE_CHOICES)
-        current_user.phone = normalized_phone
+        current_user.mobile_number = submitted_mobile
         current_user.city = request.form.get("city", current_user.city)
         state_choice = (request.form.get("state") or "").strip().upper()
         if state_choice not in STATE_CHOICES:
@@ -339,7 +434,7 @@ def _handle_account_creation() -> None:
         name = (request.form.get("name") or "").strip()
         email = (request.form.get("email") or "").strip().lower()
         password = request.form.get("password") or ""
-        phone = _normalize_mobile(request.form.get("phone") or "")
+        mobile_number = (request.form.get("mobile_number") or "").strip()
         city = (request.form.get("city") or "").strip()
         state = (request.form.get("state") or "").strip().upper()
         if state not in STATE_CHOICES:
@@ -347,14 +442,19 @@ def _handle_account_creation() -> None:
             return
         vehicle_types = _parse_vehicle_types(request.form.getlist("vehicle_types"))
 
-        if not all([name, email, password, phone, city, state, vehicle_types]):
-            flash("All coach/admin fields are required, including mobile number and vehicle types.", "warning")
+        if not all(
+            [name, email, password, mobile_number, city, state, vehicle_types]
+        ):
+            flash(
+                "All coach/admin fields are required, including a mobile number.",
+                "warning",
+            )
             return
 
         coach = Coach(
             name=name,
             email=email,
-            phone=phone,
+            mobile_number=mobile_number,
             city=city,
             state=state,
             vehicle_types=vehicle_types,
@@ -366,7 +466,10 @@ def _handle_account_creation() -> None:
             db.session.flush()
         except IntegrityError:
             db.session.rollback()
-            flash("Email or mobile number already exists for another coach account.", "danger")
+            flash(
+                "Unable to create account: duplicate email or mobile number.",
+                "danger",
+            )
             return
 
         if role == "admin":

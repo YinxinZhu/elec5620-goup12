@@ -8,8 +8,8 @@
     <input class="form-control" id="name" name="name" value="{{ current_user.name }}" required>
   </div>
   <div class="col-md-6">
-    <label class="form-label" for="phone">Mobile Number</label>
-    <input class="form-control" id="phone" name="phone" value="{{ current_user.phone }}" placeholder="e.g. 0400111222" required>
+    <label class="form-label" for="mobile_number">Mobile number</label>
+    <input type="tel" class="form-control" id="mobile_number" name="mobile_number" value="{{ current_user.mobile_number }}" required>
   </div>
   <div class="col-md-6">
     <label class="form-label" for="city">City</label>
