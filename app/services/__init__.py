@@ -7,6 +7,12 @@ from .progress import (
     export_state_progress_csv,
     get_progress_summary,
 )
+from .language_management import (
+    LanguageSwitchError,
+    LanguageSwitchPermissionError,
+    LanguageSwitchValidationError,
+    switch_student_language,
+)
 from .state_management import (
     StateSwitchError,
     StateSwitchPermissionError,
@@ -22,6 +28,10 @@ __all__ = [
     "ProgressValidationError",
     "export_state_progress_csv",
     "get_progress_summary",
+    "LanguageSwitchError",
+    "LanguageSwitchPermissionError",
+    "LanguageSwitchValidationError",
+    "switch_student_language",
     "StateSwitchError",
     "StateSwitchPermissionError",
     "StateSwitchValidationError",

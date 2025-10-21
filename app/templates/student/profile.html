@@ -1,22 +1,22 @@
 {% extends 'base.html' %}
-{% block title %}Student Profile{% endblock %}
+{% block title %}{{ _('Student Profile') }}{% endblock %}
 {% block content %}
-<h1 class="h4 mb-4">Profile settings</h1>
-<p class="text-muted">Update your learner profile details and password.</p>
+<h1 class="h4 mb-4">{{ _('Profile settings') }}</h1>
+<p class="text-muted">{{ _('Update your learner profile details and password.') }}</p>
 <form method="post">
   <div class="row g-3">
     <div class="col-md-6">
-      <label for="name" class="form-label">Full name</label>
+      <label for="name" class="form-label">{{ _('Full name') }}</label>
       <input type="text" class="form-control" id="name" name="name" value="{{ current_user.name }}" required>
     </div>
     <div class="col-md-6">
-      <label for="email" class="form-label">Email</label>
-      <input type="email" class="form-control" id="email" name="email" value="{{ current_user.email or '' }}" placeholder="Optional">
+      <label for="email" class="form-label">{{ _('Email') }}</label>
+      <input type="email" class="form-control" id="email" name="email" value="{{ current_user.email or '' }}" placeholder="{{ _('Optional') }}">
     </div>
   </div>
   <div class="row g-3 mt-1">
     <div class="col-md-6">
-      <label for="state" class="form-label">State or territory</label>
+      <label for="state" class="form-label">{{ _('State or territory') }}</label>
       <select class="form-select" id="state" name="state" required>
         {% for state in state_choices %}
         <option value="{{ state }}" {% if current_user.state == state %}selected{% endif %}>{{ state }}</option>
@@ -24,30 +24,30 @@
       </select>
     </div>
     <div class="col-md-6">
-      <label for="preferred_language" class="form-label">Preferred language</label>
+      <label for="preferred_language" class="form-label">{{ _('Preferred language') }}</label>
       <select class="form-select" id="preferred_language" name="preferred_language" required>
         {% for lang in language_choices %}
-        <option value="{{ lang }}" {% if current_user.preferred_language == lang %}selected{% endif %}>{{ lang.title() }}</option>
+        <option value="{{ lang }}" {% if current_user.preferred_language == lang %}selected{% endif %}>{{ _(lang.title()) }}</option>
         {% endfor %}
       </select>
     </div>
   </div>
   <fieldset class="mt-4">
-    <legend class="fs-6">Update password</legend>
-    <p class="text-muted small">Leave blank to keep your current password.</p>
+    <legend class="fs-6">{{ _('Update password') }}</legend>
+    <p class="text-muted small">{{ _('Leave blank to keep your current password.') }}</p>
     <div class="row g-3">
       <div class="col-md-6">
-        <label for="new_password" class="form-label">New password</label>
+        <label for="new_password" class="form-label">{{ _('New password') }}</label>
         <input type="password" class="form-control" id="new_password" name="new_password" autocomplete="new-password">
       </div>
       <div class="col-md-6">
-        <label for="confirm_password" class="form-label">Confirm password</label>
+        <label for="confirm_password" class="form-label">{{ _('Confirm password') }}</label>
         <input type="password" class="form-control" id="confirm_password" name="confirm_password" autocomplete="new-password">
       </div>
     </div>
   </fieldset>
   <div class="mt-4">
-    <button type="submit" class="btn btn-primary">Save changes</button>
+    <button type="submit" class="btn btn-primary">{{ _('Save changes') }}</button>
   </div>
 </form>
 {% endblock %}

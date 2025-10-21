@@ -103,7 +103,9 @@ def get_progress_summary(
     _enforce_self_access(student, acting_student)
     resolved_state = _resolve_state(student, state)
 
-    available_questions = get_questions_for_state(resolved_state)
+    available_questions = get_questions_for_state(
+        resolved_state, language=student.preferred_language
+    )
     available_qids = {question.qid for question in available_questions}
     latest_attempts = _latest_attempts_by_qid(
         student, state=resolved_state, allowed_qids=available_qids
@@ -152,7 +154,9 @@ def export_state_progress_csv(
     _enforce_self_access(student, acting_student)
     resolved_state = _resolve_state(student, state)
 
-    available_questions = get_questions_for_state(resolved_state)
+    available_questions = get_questions_for_state(
+        resolved_state, language=student.preferred_language
+    )
     available_qids = sorted({question.qid for question in available_questions})
     latest_attempts = _latest_attempts_by_qid(
         student, state=resolved_state, allowed_qids=available_qids
