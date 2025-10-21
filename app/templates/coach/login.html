@@ -1,22 +1,73 @@
 {% extends 'base.html' %}
-{% block title %}Coach & Admin Login{% endblock %}
+{% block title %}Portal Login{% endblock %}
 {% block content %}
 <div class="row justify-content-center">
-  <div class="col-md-5">
-    <div class="card shadow-sm">
+  <div class="col-lg-6">
+    <div class="card shadow-sm mb-4">
       <div class="card-body">
-        <h1 class="h4 mb-3">Coach & Admin Login</h1>
-        <p class="text-muted small">Use your coach or administrator credentials to access the dashboard.</p>
-        <form method="post">
+        <h1 class="h4 mb-3">Account login</h1>
+        <p class="text-muted small">
+          Administrators, coaches, and students all sign in with the mobile number linked to their account.
+        </p>
+        <form method="post" novalidate>
           <div class="mb-3">
-            <label for="email" class="form-label">Email</label>
-            <input type="email" class="form-control" id="email" name="email" required>
+            <label for="mobile_number" class="form-label">Mobile number</label>
+            <input type="tel" class="form-control" id="mobile_number" name="mobile_number" value="{{ request.form.get('mobile_number', '') }}" required>
           </div>
           <div class="mb-3">
             <label for="password" class="form-label">Password</label>
             <input type="password" class="form-control" id="password" name="password" required>
           </div>
           <button type="submit" class="btn btn-primary w-100">Login</button>
+        </form>
+      </div>
+    </div>
+    <div class="card border-0 shadow-sm">
+      <div class="card-body">
+        <h2 class="h5 mb-3">New student? Create an account</h2>
+        <p class="text-muted small">Register below to access the learner portal directly from the web.</p>
+        <form method="post" action="{{ url_for('coach.register_student') }}" novalidate>
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label for="student_name" class="form-label">Full name</label>
+              <input type="text" class="form-control" id="student_name" name="student_name" required>
+            </div>
+            <div class="col-md-6">
+              <label for="student_email" class="form-label">Email <span class="text-muted">(optional)</span></label>
+              <input type="email" class="form-control" id="student_email" name="student_email" placeholder="name@example.com">
+            </div>
+            <div class="col-md-6">
+              <label for="student_mobile_number" class="form-label">Mobile number</label>
+              <input type="tel" class="form-control" id="student_mobile_number" name="student_mobile_number" required>
+            </div>
+            <div class="col-md-6">
+              <label for="student_state" class="form-label">State or territory</label>
+              <select class="form-select" id="student_state" name="student_state" required>
+                <option value="" selected disabled>Choose...</option>
+                {% for state in state_choices %}
+                <option value="{{ state }}">{{ state }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label for="student_preferred_language" class="form-label">Preferred language</label>
+              <select class="form-select" id="student_preferred_language" name="student_preferred_language">
+                {% for lang in language_choices %}
+                <option value="{{ lang }}">{{ lang.title() }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-6"></div>
+            <div class="col-md-6">
+              <label for="student_password" class="form-label">Password</label>
+              <input type="password" class="form-control" id="student_password" name="student_password" required>
+            </div>
+            <div class="col-md-6">
+              <label for="student_confirm_password" class="form-label">Confirm password</label>
+              <input type="password" class="form-control" id="student_confirm_password" name="student_confirm_password" required>
+            </div>
+          </div>
+          <button type="submit" class="btn btn-outline-primary w-100 mt-4">Register and start learning</button>
         </form>
       </div>
     </div>
