@@ -18,11 +18,15 @@ MOBILE_PADDING = 4
 DEFAULT_ADMIN_EMAIL = "admin@example.com"
 DEFAULT_ADMIN_PASSWORD = "password123"
 DEFAULT_ADMIN_NAME = "Platform Administrator"
-DEFAULT_ADMIN_PHONE = "0400 999 000"
+DEFAULT_ADMIN_MOBILE_NUMBER = "0400 999 000"
 DEFAULT_ADMIN_CITY = "Sydney"
 DEFAULT_ADMIN_STATE = "NSW"
 DEFAULT_ADMIN_VEHICLE_TYPES = "AT,MT"
 DEFAULT_ADMIN_BIO = "Auto-generated administrator account with full access."
+
+
+def _digits_only(value: str | None) -> str:
+    return "".join(ch for ch in (value or "") if ch.isdigit())
 
 
 def _generate_placeholder_mobile(student_id: int) -> str:
@@ -116,17 +120,15 @@ def ensure_admin_support(engine: Engine, logger: logging.Logger | None = None) -
                 session.commit()
                 return
 
-            coach = (
-                session.query(Coach)
-                .filter(Coach.email == DEFAULT_ADMIN_EMAIL)
-                .first()
-            )
+            coach = session.query(Coach).filter(
+                Coach.email == DEFAULT_ADMIN_EMAIL
+            ).first()
 
             if not coach:
                 coach = Coach(
                     email=DEFAULT_ADMIN_EMAIL,
                     name=DEFAULT_ADMIN_NAME,
-                    phone=DEFAULT_ADMIN_PHONE,
+                    mobile_number=_digits_only(DEFAULT_ADMIN_MOBILE_NUMBER),
                     city=DEFAULT_ADMIN_CITY,
                     state=DEFAULT_ADMIN_STATE,
                     vehicle_types=DEFAULT_ADMIN_VEHICLE_TYPES,
@@ -140,14 +142,96 @@ def ensure_admin_support(engine: Engine, logger: logging.Logger | None = None) -
             elif coach.admin_profile is not None:
                 session.commit()
                 return
+            else:
+                coach.mobile_number = _digits_only(DEFAULT_ADMIN_MOBILE_NUMBER)
 
             session.add(Admin(id=coach.id, created_at=datetime.utcnow()))
             session.commit()
             logger.info(
-                "Administrator account ensured: %s", DEFAULT_ADMIN_EMAIL
+                "Administrator account ensured: %s (mobile %s)",
+                DEFAULT_ADMIN_EMAIL,
+                DEFAULT_ADMIN_MOBILE_NUMBER,
             )
     except SQLAlchemyError:
         logger.exception("Failed to ensure administrator account during maintenance")
+        raise
+
+
+def ensure_coach_mobile_uniqueness(
+    engine: Engine, logger: logging.Logger | None = None
+) -> None:
+    """Ensure coach mobile numbers remain unique for legacy databases."""
+
+    inspector = inspect(engine)
+    if "coaches" not in inspector.get_table_names():
+        return
+
+    indexes = inspector.get_indexes("coaches")
+    has_unique_mobile = any(
+        index.get("unique") and index.get("column_names") == ["phone"]
+        for index in indexes
+    )
+    if has_unique_mobile:
+        return
+
+    logger = logger or logging.getLogger(__name__)
+    logger.warning(
+        "Missing unique index on coaches.mobile_number detected; applying legacy schema patch."
+    )
+
+    try:
+        with engine.begin() as connection:
+            connection.execute(
+                text(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS "
+                    "ix_coaches_mobile_number ON coaches(phone)"
+                )
+            )
+    except SQLAlchemyError:
+        logger.exception(
+            "Failed to enforce unique coach mobile numbers during maintenance"
+        )
+        raise
+
+
+def normalize_account_mobile_numbers(
+    engine: Engine, logger: logging.Logger | None = None
+) -> None:
+    """Normalise stored mobile numbers to digits-only strings."""
+
+    inspector = inspect(engine)
+    tables = set(inspector.get_table_names())
+    if "coaches" not in tables and "students" not in tables:
+        return
+
+    logger = logger or logging.getLogger(__name__)
+
+    from .models import Coach, Student
+
+    try:
+        with Session(bind=engine) as session:
+            changed = False
+
+            if "coaches" in tables:
+                for coach in session.query(Coach).yield_per(50):
+                    normalized = _digits_only(coach.mobile_number)
+                    if normalized and coach.mobile_number != normalized:
+                        coach.mobile_number = normalized
+                        changed = True
+
+            if "students" in tables:
+                for student in session.query(Student).yield_per(50):
+                    normalized = _digits_only(student.mobile_number)
+                    if normalized and student.mobile_number != normalized:
+                        student.mobile_number = normalized
+                        changed = True
+
+            if changed:
+                session.commit()
+            else:
+                session.rollback()
+    except SQLAlchemyError:
+        logger.exception("Failed to normalise mobile numbers during maintenance")
         raise
 
 
@@ -188,5 +272,7 @@ def ensure_database_schema(engine: Engine, logger: logging.Logger | None = None)
 
     ensure_core_tables(engine, logger)
     ensure_student_mobile_column(engine, logger)
+    ensure_coach_mobile_uniqueness(engine, logger)
     ensure_admin_support(engine, logger)
+    normalize_account_mobile_numbers(engine, logger)
     ensure_variant_support(engine, logger)
