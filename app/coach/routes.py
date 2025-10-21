@@ -16,6 +16,7 @@ from sqlalchemy.exc import IntegrityError
 from urllib.parse import urljoin, urlparse
 
 from .. import db
+from ..i18n import get_language_choices
 from ..models import Admin, Appointment, AvailabilitySlot, Coach, MockExamSummary, Student
 from ..services import StateSwitchError, switch_student_state
 
@@ -32,7 +33,7 @@ STATE_CHOICES: list[str] = [
     "WA",
 ]
 
-LANGUAGE_CHOICES: list[str] = ["ENGLISH", "CHINESE"]
+LANGUAGE_CHOICES: list[str] = [choice["code"] for choice in get_language_choices()]
 
 
 def _normalize_mobile_number(raw: str) -> str:

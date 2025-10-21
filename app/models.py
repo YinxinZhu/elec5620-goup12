@@ -192,6 +192,7 @@ class Question(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     qid = db.Column(db.String(50), nullable=False)
     prompt = db.Column(db.Text, nullable=False)
+    language = db.Column(db.String(20), nullable=False, default="ENGLISH")
     state_scope = db.Column(db.String(10), nullable=False, default="ALL")
     topic = db.Column(db.String(120), nullable=False, default="general")
     option_a = db.Column(db.String(255), nullable=False, default="Option A")
@@ -203,7 +204,9 @@ class Question(db.Model):
     image_url = db.Column(db.String(500))
 
     __table_args__ = (
-        UniqueConstraint("qid", "state_scope", name="uq_question_qid_state"),
+        UniqueConstraint(
+            "qid", "state_scope", "language", name="uq_question_qid_state_language"
+        ),
     )
 
 

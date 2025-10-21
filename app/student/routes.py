@@ -2,10 +2,11 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from flask import Blueprint, flash, redirect, render_template, request, url_for
+from flask import Blueprint, flash, redirect, render_template, request, session, url_for
 from flask_login import current_user, login_required
 
 from .. import db
+from ..i18n import get_language_choices
 from ..models import Appointment, AvailabilitySlot, Student
 from ..services import StateSwitchError, switch_student_state
 
@@ -22,7 +23,7 @@ STATE_CHOICES: list[str] = [
     "WA",
 ]
 
-LANGUAGE_CHOICES: list[str] = ["ENGLISH", "CHINESE"]
+LANGUAGE_CHOICES: list[str] = [choice["code"] for choice in get_language_choices()]
 
 
 def _current_student() -> Student | None:
@@ -95,6 +96,7 @@ def profile():
         language_choice = (request.form.get("preferred_language") or "").strip().upper()
         if language_choice in LANGUAGE_CHOICES:
             student.preferred_language = language_choice
+            session["preferred_language"] = language_choice
         else:
             flash("Please choose a supported language.", "danger")
             return render_template(

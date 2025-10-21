@@ -7,6 +7,7 @@ from typing import Any
 
 from flask import Response, abort, current_app, g, jsonify, request
 from .. import db
+from ..i18n import normalise_language_code
 from ..models import (
     ExamRule,
     MockExamPaper,
@@ -42,7 +43,6 @@ from ..services.variant_generation import (
 from . import api_bp
 
 PHONE_REGEX = re.compile(r"^\+?\d{8,15}$")
-VALID_LANGUAGES = {"ENGLISH", "CHINESE"}
 VALID_OPTIONS = {"A", "B", "C", "D"}
 DEFAULT_VARIANT_COUNT = 3
 MAX_VARIANTS_PER_REQUEST = 5
@@ -124,7 +124,7 @@ def _serialise_profile(student: Student) -> dict[str, Any]:
 
 
 def _questions_payload(student: Student, *, state: str, topic: str | None = None) -> list[dict[str, Any]]:
-    questions = get_questions_for_state(state)
+    questions = get_questions_for_state(state, language=student.preferred_language)
     starred_ids = {
         entry.question_id for entry in StarredQuestion.query.filter_by(student_id=student.id)
     }
@@ -326,7 +326,8 @@ def register():
     password = (data.get("password") or "").strip()
     nickname = (data.get("nickname") or "").strip()
     state = _normalise_state(data.get("state"))
-    preferred_language = _normalise_state(data.get("preferredLanguage")) or "ENGLISH"
+    preferred_language_raw = data.get("preferredLanguage")
+    preferred_language = normalise_language_code(preferred_language_raw)
 
     if not PHONE_REGEX.match(mobile):
         return _json_error("A valid mobile number is required.")
@@ -336,8 +337,10 @@ def register():
         return _json_error("Nickname is required.")
     if not state:
         return _json_error("A target state is required.")
-    if preferred_language not in VALID_LANGUAGES:
+    if preferred_language_raw and preferred_language is None:
         return _json_error("Preferred language must be English or Chinese.")
+
+    preferred_language = preferred_language or "ENGLISH"
     if Student.query.filter_by(mobile_number=mobile).first():
         return _json_error("Mobile number is already registered.", 409)
 
@@ -495,7 +498,12 @@ def update_profile():
     data = request.get_json(silent=True) or {}
     nickname = (data.get("nickname") or "").strip()
     avatar_url = data.get("avatarUrl")
-    preferred_language = _normalise_state(data.get("preferredLanguage")) or "ENGLISH"
+    preferred_language_raw = data.get("preferredLanguage")
+    preferred_language = (
+        normalise_language_code(preferred_language_raw)
+        if preferred_language_raw is not None
+        else None
+    )
     target_state = _normalise_state(data.get("state"))
     target_exam_date = _parse_date(data.get("targetExamDate"))
     push_enabled = data.get("notificationPush")
@@ -503,7 +511,7 @@ def update_profile():
 
     if not nickname:
         return _json_error("Nickname is required.")
-    if preferred_language not in VALID_LANGUAGES:
+    if preferred_language_raw and preferred_language is None:
         return _json_error("Preferred language must be English or Chinese.")
 
     student: Student = g.current_student
@@ -516,7 +524,8 @@ def update_profile():
 
     student.name = nickname
     student.avatar_url = avatar_url
-    student.preferred_language = preferred_language
+    if preferred_language:
+        student.preferred_language = preferred_language
     student.target_exam_date = target_exam_date
     if push_enabled is not None:
         student.notification_push_enabled = bool(push_enabled)

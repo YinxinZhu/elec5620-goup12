@@ -1,7 +1,7 @@
-from flask import Flask
+from flask import Flask, flash, g, redirect, request, session, url_for
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
-from flask_login import LoginManager
+from flask_login import LoginManager, current_user
 from pathlib import Path
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import ArgumentError
@@ -13,6 +13,19 @@ login_manager.login_view = "coach.login"
 
 from .config import Config
 from .db_maintenance import ensure_database_schema
+from .i18n import (
+    DEFAULT_LANGUAGE,
+    ensure_language_code,
+    get_language_choices,
+    language_label,
+    normalise_language_code,
+    translate_text,
+)
+
+
+def _translate(message: str, *, language: str | None = None, **values: str) -> str:
+    active_language = ensure_language_code(language or getattr(g, "active_language", DEFAULT_LANGUAGE))
+    return translate_text(message, active_language, **values)
 
 def create_app(config_class: type[Config] | None = None) -> Flask:
     app = Flask(__name__, template_folder=str(Path(__file__).parent / "templates"))
@@ -38,6 +51,10 @@ def create_app(config_class: type[Config] | None = None) -> Flask:
     login_manager.init_app(app)
 
     from .models import Coach, Student
+    from .services.language_management import (
+        LanguageSwitchError,
+        switch_student_language,
+    )
 
     @login_manager.user_loader
     def load_user(user_id: str) -> Coach | Student | None:
@@ -68,10 +85,71 @@ def create_app(config_class: type[Config] | None = None) -> Flask:
     app.register_blueprint(student_bp)
     app.register_blueprint(api_bp)
 
+    @app.before_request
+    def assign_active_language() -> None:
+        language = None
+        if current_user.is_authenticated:
+            user = current_user._get_current_object()
+            preference = getattr(user, "preferred_language", None)
+            language = normalise_language_code(preference) or language
+        session_preference = normalise_language_code(session.get("preferred_language"))
+        if not language:
+            language = session_preference
+        if not language:
+            language = DEFAULT_LANGUAGE
+        session["preferred_language"] = language
+        g.active_language = language
+
+    @app.context_processor
+    def inject_i18n():
+        active = ensure_language_code(getattr(g, "active_language", DEFAULT_LANGUAGE))
+
+        def translate(text: str, **values: str) -> str:
+            return translate_text(text, active, **values)
+
+        return {
+            "_": translate,
+            "active_language": active,
+            "language_choices": get_language_choices(),
+            "language_label": language_label,
+        }
+
+    @app.post("/language")
+    def switch_language():
+        requested = normalise_language_code(request.form.get("language"))
+        redirect_target = request.form.get("next") or request.referrer or url_for("coach.login")
+
+        if not requested:
+            flash(_translate("Please choose a supported language."), "danger")
+            return redirect(redirect_target)
+
+        session["preferred_language"] = requested
+        g.active_language = requested
+
+        message: str | None = None
+        if current_user.is_authenticated:
+            user = current_user._get_current_object()
+            preference_attr = getattr(user, "preferred_language", None)
+            if preference_attr is not None:
+                acting_student = user if getattr(user, "is_student", False) else None
+                try:
+                    message = switch_student_language(user, requested, acting_student=acting_student)
+                except LanguageSwitchError as exc:
+                    flash(str(exc), "danger")
+                    return redirect(redirect_target)
+
+        if not message:
+            message = translate_text(
+                "Language switched to {label}.",
+                requested,
+                label=language_label(requested),
+            )
+
+        flash(message, "info")
+        return redirect(redirect_target)
+
     @app.route("/")
     def index():
-        from flask import redirect, url_for
-
         return redirect(url_for("coach.login"))
 
     with app.app_context():

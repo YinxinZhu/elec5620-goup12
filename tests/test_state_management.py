@@ -77,6 +77,87 @@ def sample_data(app_context):
         vehicle_types="MT",
     )
 
+    questions = [
+        Question(
+            qid="q1",
+            prompt="Shared question",
+            state_scope="ALL",
+            topic="core",
+            option_a="A",
+            option_b="B",
+            option_c="C",
+            option_d="D",
+            correct_option="A",
+            explanation="Because",
+            language="ENGLISH",
+        ),
+        Question(
+            qid="q1",
+            prompt="共享题目",
+            state_scope="ALL",
+            topic="core",
+            option_a="A",
+            option_b="B",
+            option_c="C",
+            option_d="D",
+            correct_option="A",
+            explanation="因为",
+            language="CHINESE",
+        ),
+        Question(
+            qid="q2",
+            prompt="NSW question",
+            state_scope="NSW",
+            topic="state",
+            option_a="A",
+            option_b="B",
+            option_c="C",
+            option_d="D",
+            correct_option="B",
+            explanation="NSW",
+            language="ENGLISH",
+        ),
+        Question(
+            qid="q2",
+            prompt="新州题目",
+            state_scope="NSW",
+            topic="state",
+            option_a="A",
+            option_b="B",
+            option_c="C",
+            option_d="D",
+            correct_option="B",
+            explanation="NSW",
+            language="CHINESE",
+        ),
+        Question(
+            qid="q2",
+            prompt="VIC variant",
+            state_scope="VIC",
+            topic="state",
+            option_a="A",
+            option_b="B",
+            option_c="C",
+            option_d="D",
+            correct_option="C",
+            explanation="VIC",
+            language="ENGLISH",
+        ),
+        Question(
+            qid="q2",
+            prompt="维州变体",
+            state_scope="VIC",
+            topic="state",
+            option_a="A",
+            option_b="B",
+            option_c="C",
+            option_d="D",
+            correct_option="C",
+            explanation="VIC",
+            language="CHINESE",
+        ),
+    ]
+
     db.session.add_all(
         [
             student,
@@ -84,42 +165,7 @@ def sample_data(app_context):
             coach_vic,
             ExamRule(state="NSW", total_questions=45, pass_mark=38, time_limit_minutes=45),
             ExamRule(state="VIC", total_questions=42, pass_mark=36, time_limit_minutes=40),
-            Question(
-                qid="q1",
-                prompt="Shared question",
-                state_scope="ALL",
-                topic="core",
-                option_a="A",
-                option_b="B",
-                option_c="C",
-                option_d="D",
-                correct_option="A",
-                explanation="Because",
-            ),
-            Question(
-                qid="q2",
-                prompt="NSW question",
-                state_scope="NSW",
-                topic="state",
-                option_a="A",
-                option_b="B",
-                option_c="C",
-                option_d="D",
-                correct_option="B",
-                explanation="NSW",
-            ),
-            Question(
-                qid="q2",
-                prompt="VIC variant",
-                state_scope="VIC",
-                topic="state",
-                option_a="A",
-                option_b="B",
-                option_c="C",
-                option_d="D",
-                correct_option="C",
-                explanation="VIC",
-            ),
+            *questions,
         ]
     )
     paper_nsw = MockExamPaper(state="NSW", title="NSW Paper 1", time_limit_minutes=45)
@@ -156,7 +202,7 @@ def test_student_profile_switch_flow(app_context, sample_data):
 
     page = response.get_data(as_text=True)
     assert "Current state: VIC" in page
-    assert "Profile updated successfully" in page
+    assert "个人资料更新成功" in page
 
     with app_context.app_context():
         student = Student.query.filter_by(email="jamie@example.com").one()
@@ -166,13 +212,38 @@ def test_student_profile_switch_flow(app_context, sample_data):
         ).first()
 
 
+def test_language_switch_route_updates_preference(app_context, sample_data):
+    client = app_context.test_client()
+    _login_student(client, "0400000001", "password123")
+
+    response = client.post(
+        "/language",
+        data={"language": "CHINESE"},
+        follow_redirects=True,
+    )
+
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+    assert "语言已切换为" in html
+
+    db.session.refresh(sample_data)
+    assert sample_data.preferred_language == "CHINESE"
+
+    profile_page = client.get("/student/profile").get_data(as_text=True)
+    assert "首选语言" in profile_page
+
+
 @pytest.fixture
 def progress_dataset(sample_data):
     student = sample_data
     now = datetime.utcnow()
 
-    shared_question = Question.query.filter_by(qid="q1", state_scope="ALL").one()
-    nsw_question = Question.query.filter_by(qid="q2", state_scope="NSW").one()
+    shared_question = (
+        Question.query.filter_by(qid="q1", state_scope="ALL", language="ENGLISH").one()
+    )
+    nsw_question = (
+        Question.query.filter_by(qid="q2", state_scope="NSW", language="ENGLISH").one()
+    )
 
     extra_nsw_question = Question(
         qid="q3",
@@ -185,6 +256,7 @@ def progress_dataset(sample_data):
         option_d="D",
         correct_option="A",
         explanation="Extra",
+        language="ENGLISH",
     )
     vic_extra_question = Question(
         qid="q4",
@@ -197,6 +269,7 @@ def progress_dataset(sample_data):
         option_d="D",
         correct_option="A",
         explanation="Extra",
+        language="ENGLISH",
     )
     db.session.add_all([extra_nsw_question, vic_extra_question])
     db.session.commit()
@@ -296,10 +369,14 @@ def test_switching_state_updates_preferences_and_progress(sample_data):
     assert "VIC" in summary
     assert "42" in summary
 
-    questions = get_questions_for_state("VIC")
+    questions = get_questions_for_state("VIC", language=student.preferred_language)
     # q1 shared + VIC-specific q2 (deduplicated against NSW variant)
     assert {q.qid for q in questions} == {"q1", "q2"}
     assert any(q.prompt == "VIC variant" for q in questions)
+
+    chinese_questions = get_questions_for_state("VIC", language="CHINESE")
+    assert {q.qid for q in chinese_questions} == {"q1", "q2"}
+    assert any(q.prompt == "维州变体" for q in chinese_questions)
 
     coaches = get_coaches_for_state("VIC")
     assert len(coaches) == 1
