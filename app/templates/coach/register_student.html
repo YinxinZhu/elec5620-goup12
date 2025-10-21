@@ -1,0 +1,61 @@
+{% extends 'base.html' %}
+{% block title %}{{ _('Register a learner account') }}{% endblock %}
+{% block body_class %}auth-body{% endblock %}
+{% block navbar %}{% endblock %}
+{% block main_class %}auth-container{% endblock %}
+{% block content %}
+<div class="auth-panel">
+  <div class="auth-avatar" aria-hidden="true">🎓</div>
+  <h1 class="auth-title">{{ _('Register a learner account') }}</h1>
+  <p class="auth-subtitle">{{ _('Complete the form below to create a learner account. After registration we will sign you in automatically.') }}</p>
+  <form method="post" novalidate>
+    <div class="mb-3">
+      <label for="student_name" class="form-label">{{ _('Full name') }}</label>
+      <input type="text" class="form-control" id="student_name" name="student_name" value="{{ request.form.get('student_name', '') }}" required>
+    </div>
+    <div class="mb-3">
+      <label for="student_mobile_number" class="form-label">{{ _('Mobile number') }}</label>
+      <input type="tel" class="form-control" id="student_mobile_number" name="student_mobile_number" value="{{ request.form.get('student_mobile_number', '') }}" required>
+    </div>
+    <div class="mb-3">
+      <label for="student_email" class="form-label">{{ _('Email') }} <span class="text-muted">{{ _('(optional)') }}</span></label>
+      <input type="email" class="form-control" id="student_email" name="student_email" value="{{ request.form.get('student_email', '') }}" placeholder="name@example.com">
+    </div>
+    <div class="row g-3">
+      <div class="col-sm-6">
+        <label for="student_state" class="form-label">{{ _('State or territory') }}</label>
+        <select class="form-select" id="student_state" name="student_state" required>
+          <option value="" disabled {% if not request.form.get('student_state') %}selected{% endif %}>{{ _('Select your state') }}</option>
+          {% for state in state_choices %}
+          <option value="{{ state }}" {% if request.form.get('student_state') == state %}selected{% endif %}>{{ state }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-sm-6">
+        <label for="student_preferred_language" class="form-label">{{ _('Preferred language') }}</label>
+        <select class="form-select" id="student_preferred_language" name="student_preferred_language">
+          {% for option in language_choices %}
+          <option value="{{ option.code }}"{% if request.form.get('student_preferred_language', active_language) == option.code %} selected{% endif %}>
+            {{ option.label }}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+    <div class="row g-3 mt-1">
+      <div class="col-sm-6">
+        <label for="student_password" class="form-label">{{ _('Password') }}</label>
+        <input type="password" class="form-control" id="student_password" name="student_password" required>
+      </div>
+      <div class="col-sm-6">
+        <label for="student_confirm_password" class="form-label">{{ _('Confirm password') }}</label>
+        <input type="password" class="form-control" id="student_confirm_password" name="student_confirm_password" required>
+      </div>
+    </div>
+    <div class="d-flex justify-content-between align-items-center mt-4">
+      <a class="btn btn-link" href="{{ url_for('coach.login') }}">{{ _('Back to login') }}</a>
+      <button type="submit" class="btn btn-primary">{{ _('Submit registration') }}</button>
+    </div>
+  </form>
+</div>
+{% endblock %}

@@ -1,0 +1,47 @@
+{% extends 'base.html' %}
+{% block title %}{{ _('Practice Session') }}{% endblock %}
+{% block content %}
+<div class="practice-session">
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+      <h1 class="h4 mb-1">{{ _('Practice results') }}</h1>
+      <p class="text-muted mb-0">{{ _('State') }} {{ state }}{% if practice_topic %} · {{ _('Topic') }}: {{ practice_topic }}{% endif %}</p>
+    </div>
+    <div class="d-flex gap-2">
+      <a class="btn btn-outline-secondary" href="{{ url_for('student.exams') }}">{{ _('Back to exam centre') }}</a>
+      <form method="post" action="{{ url_for('student.practice') }}">
+        <input type="hidden" name="question_count" value="{{ questions|length }}">
+        {% if practice_topic %}<input type="hidden" name="topic" value="{{ practice_topic }}">{% endif %}
+        <button type="submit" class="btn btn-primary">{{ _('Refresh set') }}</button>
+      </form>
+    </div>
+  </div>
+  <div class="accordion" id="practiceAccordion">
+    {% for question in questions %}
+    <div class="accordion-item">
+      <h2 class="accordion-header" id="heading{{ loop.index }}">
+        <button class="accordion-button {% if not loop.first %}collapsed{% endif %}" type="button" data-bs-toggle="collapse" data-bs-target="#collapse{{ loop.index }}" aria-expanded="{{ 'true' if loop.first else 'false' }}" aria-controls="collapse{{ loop.index }}">
+          {{ loop.index }}. {{ question.prompt }}
+        </button>
+      </h2>
+      <div id="collapse{{ loop.index }}" class="accordion-collapse collapse {% if loop.first %}show{% endif %}" aria-labelledby="heading{{ loop.index }}" data-bs-parent="#practiceAccordion">
+        <div class="accordion-body">
+          <ul class="list-unstyled mb-3 options-list">
+            <li {% if question.correct_option == 'A' %}class="correct"{% endif %}><strong>A.</strong> {{ question.option_a }}</li>
+            <li {% if question.correct_option == 'B' %}class="correct"{% endif %}><strong>B.</strong> {{ question.option_b }}</li>
+            <li {% if question.correct_option == 'C' %}class="correct"{% endif %}><strong>C.</strong> {{ question.option_c }}</li>
+            <li {% if question.correct_option == 'D' %}class="correct"{% endif %}><strong>D.</strong> {{ question.option_d }}</li>
+          </ul>
+          <div class="alert alert-info">{{ _('Correct answer') }}: {{ question.correct_option }}</div>
+          {% if question.explanation %}
+          <p class="text-muted mb-0">{{ _('Explanation') }}: {{ question.explanation }}</p>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+    {% else %}
+    <div class="alert alert-warning">{{ _('No practice questions found. Try generating a new set.') }}</div>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}

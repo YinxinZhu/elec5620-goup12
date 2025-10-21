@@ -123,20 +123,29 @@ def create_app(config_class: type[Config] | None = None) -> Flask:
             flash(_translate("Please choose a supported language."), "danger")
             return redirect(redirect_target)
 
-        session["preferred_language"] = requested
-        g.active_language = requested
-
         message: str | None = None
+        previous_language = ensure_language_code(
+            normalise_language_code(session.get("preferred_language")) or DEFAULT_LANGUAGE
+        )
         if current_user.is_authenticated:
             user = current_user._get_current_object()
             preference_attr = getattr(user, "preferred_language", None)
             if preference_attr is not None:
                 acting_student = user if getattr(user, "is_student", False) else None
                 try:
-                    message = switch_student_language(user, requested, acting_student=acting_student)
+                    message = switch_student_language(
+                        user, requested, acting_student=acting_student
+                    )
+                    db.session.commit()
                 except LanguageSwitchError as exc:
+                    db.session.rollback()
+                    session["preferred_language"] = previous_language
+                    g.active_language = previous_language
                     flash(str(exc), "danger")
                     return redirect(redirect_target)
+
+        session["preferred_language"] = requested
+        g.active_language = requested
 
         if not message:
             message = translate_text(

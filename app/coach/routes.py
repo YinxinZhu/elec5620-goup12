@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Iterable
+import random
+from uuid import uuid4
 
 from flask import (
     Blueprint,
@@ -9,15 +10,28 @@ from flask import (
     redirect,
     render_template,
     request,
+    session,
     url_for,
 )
 from flask_login import current_user, login_required, login_user, logout_user
+from sqlalchemy import or_
 from sqlalchemy.exc import IntegrityError
 from urllib.parse import urljoin, urlparse
 
 from .. import db
 from ..i18n import get_language_choices
-from ..models import Admin, Appointment, AvailabilitySlot, Coach, MockExamSummary, Student
+from ..models import (
+    Admin,
+    Appointment,
+    AvailabilitySlot,
+    Coach,
+    ExamRule,
+    MockExamPaper,
+    MockExamPaperQuestion,
+    MockExamSummary,
+    Question,
+    Student,
+)
 from ..services import StateSwitchError, switch_student_state
 
 coach_bp = Blueprint("coach", __name__, url_prefix="/coach")
@@ -34,6 +48,7 @@ STATE_CHOICES: list[str] = [
 ]
 
 LANGUAGE_CHOICES: list[str] = [choice["code"] for choice in get_language_choices()]
+VALID_OPTIONS = {"A", "B", "C", "D"}
 
 
 def _normalize_mobile_number(raw: str) -> str:
@@ -47,10 +62,26 @@ def _normalized_mobile_expression(column):
     return sanitized
 
 
-def _parse_vehicle_types(values: Iterable[str]) -> str:
+def _parse_vehicle_type(value: str | None) -> str | None:
     allowed = {"AT", "MT"}
-    cleaned = {v for v in (value.strip().upper() for value in values) if v in allowed}
-    return ",".join(sorted(cleaned))
+    if value is None:
+        return None
+    cleaned = value.strip().upper()
+    if cleaned not in allowed:
+        return None
+    return cleaned
+
+
+def _extract_vehicle_type_from_form() -> str | None:
+    parsed = _parse_vehicle_type(request.form.get("vehicle_type"))
+    if parsed:
+        return parsed
+    legacy_values = request.form.getlist("vehicle_types")
+    for entry in legacy_values:
+        parsed = _parse_vehicle_type(entry)
+        if parsed:
+            return parsed
+    return None
 
 
 def _normalize_mobile(raw_value: str) -> str:
@@ -65,6 +96,21 @@ def _require_admin_access():
         flash("Only administrators may access personnel management.", "danger")
         return redirect(url_for("coach.dashboard"))
     return None
+
+
+def _question_base_query(state: str | None) -> "db.Query":
+    query = Question.query
+    if state:
+        query = query.filter(or_(Question.state_scope == "ALL", Question.state_scope == state))
+    return query.order_by(Question.topic.asc(), Question.qid.asc())
+
+
+def _default_question_state(raw_state: str | None) -> str:
+    if raw_state:
+        return raw_state
+    if current_user.is_admin:
+        return "ALL"
+    return current_user.state
 
 
 @coach_bp.before_app_request
@@ -149,8 +195,11 @@ def login():
     )
 
 
-@coach_bp.route("/register", methods=["POST"])
+@coach_bp.route("/register", methods=["GET", "POST"])
 def register_student():
+    if request.method == "GET":
+        return render_template("coach/register_student.html", state_choices=STATE_CHOICES)
+
     name = (request.form.get("student_name") or "").strip()
     mobile_input = (request.form.get("student_mobile_number") or "").strip()
     mobile_number = _normalize_mobile_number(mobile_input)
@@ -164,19 +213,19 @@ def register_student():
 
     if not name or not mobile_number or not password:
         flash("Name, mobile number, and password are required to register.", "danger")
-        return redirect(url_for("coach.login"))
+        return render_template("coach/register_student.html", state_choices=STATE_CHOICES)
 
     if password != confirm_password:
         flash("Passwords do not match.", "danger")
-        return redirect(url_for("coach.login"))
+        return render_template("coach/register_student.html", state_choices=STATE_CHOICES)
 
     if state_choice not in STATE_CHOICES:
         flash("Please select a valid state or territory.", "danger")
-        return redirect(url_for("coach.login"))
+        return render_template("coach/register_student.html", state_choices=STATE_CHOICES)
 
     if preferred_language not in LANGUAGE_CHOICES:
         flash("Please choose a supported language.", "danger")
-        return redirect(url_for("coach.login"))
+        return render_template("coach/register_student.html", state_choices=STATE_CHOICES)
 
     normalized_coach_column = _normalized_mobile_expression(Coach.mobile_number)
     if (
@@ -185,7 +234,7 @@ def register_student():
         .first()
     ):
         flash("This mobile number is already registered to a coach or administrator.", "danger")
-        return redirect(url_for("coach.login"))
+        return render_template("coach/register_student.html", state_choices=STATE_CHOICES)
 
     normalized_student_column = _normalized_mobile_expression(Student.mobile_number)
     if (
@@ -194,11 +243,11 @@ def register_student():
         .first()
     ):
         flash("This mobile number is already registered to a student.", "danger")
-        return redirect(url_for("coach.login"))
+        return render_template("coach/register_student.html", state_choices=STATE_CHOICES)
 
     if email and Student.query.filter(Student.email == email).first():
         flash("This email is already registered to a student.", "danger")
-        return redirect(url_for("coach.login"))
+        return render_template("coach/register_student.html", state_choices=STATE_CHOICES)
 
     student = Student(
         name=name,
@@ -210,9 +259,23 @@ def register_student():
     student.set_password(password)
     db.session.add(student)
 
+    summary: str | None = None
+    rule_warning: str | None = None
+    rule_exists = ExamRule.query.filter_by(state=state_choice).first() is not None
     try:
         db.session.flush()
-        summary = switch_student_state(student, state_choice, acting_student=student)
+        if rule_exists:
+            summary = switch_student_state(
+                student, state_choice, acting_student=student
+            )
+        else:
+            db.session.commit()
+            rule_warning = (
+                "Exam rules for "
+                f"{state_choice} are not configured yet."
+                " Students can practise immediately, but administrators "
+                "must add the rule before scheduling timed exams."
+            )
     except (IntegrityError, StateSwitchError) as exc:
         db.session.rollback()
         if isinstance(exc, StateSwitchError):
@@ -222,12 +285,21 @@ def register_student():
                 "Unable to register with the provided details. Please try again.",
                 "danger",
             )
+        return render_template("coach/register_student.html", state_choices=STATE_CHOICES)
+    except Exception:
+        db.session.rollback()
+        flash(
+            "Unexpected error while registering. Please try again in a moment.",
+            "danger",
+        )
         return redirect(url_for("coach.login"))
 
     login_user(student)
     flash("Student account created successfully!", "success")
     if summary:
         flash(summary, "info")
+    if rule_warning:
+        flash(rule_warning, "warning")
     return redirect(url_for("student.dashboard"))
 
 
@@ -235,6 +307,7 @@ def register_student():
 @login_required
 def logout():
     logout_user()
+    session.pop("preferred_language", None)
     flash("You have been logged out.", "info")
     return redirect(url_for("coach.login"))
 
@@ -302,12 +375,11 @@ def profile():
             flash("Please choose a valid state or territory.", "warning")
             return render_template("coach/profile.html", state_choices=STATE_CHOICES)
         current_user.state = state_choice
-        vehicle_inputs = request.form.getlist("vehicle_types")
-        types = _parse_vehicle_types(vehicle_inputs)
-        if not types:
-            flash("Please select at least one vehicle type (AT/MT).", "warning")
+        vehicle_type = _extract_vehicle_type_from_form()
+        if not vehicle_type:
+            flash("Please choose either automatic or manual transmission.", "warning")
             return render_template("coach/profile.html", state_choices=STATE_CHOICES)
-        current_user.vehicle_types = types
+        current_user.vehicle_types = vehicle_type
         current_user.bio = request.form.get("bio", current_user.bio)
         db.session.commit()
         flash("Profile updated successfully", "success")
@@ -506,10 +578,10 @@ def _handle_account_creation() -> None:
         if state not in STATE_CHOICES:
             flash("Please choose a valid state or territory.", "warning")
             return
-        vehicle_types = _parse_vehicle_types(request.form.getlist("vehicle_types"))
+        vehicle_type = _extract_vehicle_type_from_form()
 
         if not all(
-            [name, email, password, mobile_number, city, state, vehicle_types]
+            [name, email, password, mobile_number, city, state, vehicle_type]
         ):
             flash(
                 "All coach/admin fields are required, including a mobile number.",
@@ -532,7 +604,7 @@ def _handle_account_creation() -> None:
             mobile_number=mobile_number,
             city=city,
             state=state,
-            vehicle_types=vehicle_types,
+            vehicle_types=vehicle_type,
         )
         coach.set_password(password)
         db.session.add(coach)
@@ -650,3 +722,291 @@ def _handle_password_update() -> None:
 
     db.session.commit()
     flash("Password updated successfully.", "success")
+
+
+def _handle_question_upload_action() -> None:
+    file_storage = request.files.get("excel_file")
+    if not file_storage or not file_storage.filename:
+        flash("Please choose an Excel file to upload.", "warning")
+        return
+
+    default_language = (request.form.get("default_language") or "ENGLISH").strip().upper()
+    if default_language not in LANGUAGE_CHOICES:
+        default_language = "ENGLISH"
+
+    selected_state = _default_question_state(request.form.get("default_state"))
+    if selected_state not in STATE_CHOICES and selected_state != "ALL":
+        flash("Please choose a valid default state for uploaded questions.", "warning")
+        return
+
+    try:
+        file_storage.stream.seek(0)
+        created, updated = _import_question_bank(
+            file_storage.stream, default_state=selected_state, default_language=default_language
+        )
+    except ValueError as exc:
+        flash(str(exc), "danger")
+        return
+
+    flash(f"Imported {created} new questions and updated {updated} existing records.", "success")
+
+
+def _handle_exam_creation_action() -> None:
+    title = (request.form.get("title") or "").strip()
+    try:
+        time_limit = int(request.form.get("time_limit", "0"))
+    except ValueError:
+        time_limit = 0
+    if not title or time_limit <= 0:
+        flash("Please provide a title and a positive time limit.", "warning")
+        return
+
+    selection_mode = (request.form.get("selection_mode") or "manual").strip().lower()
+    state = _default_question_state(request.form.get("paper_state"))
+    if state not in STATE_CHOICES:
+        flash("Please choose a valid state for the exam paper.", "warning")
+        return
+
+    if not current_user.is_admin and state != current_user.state:
+        state = current_user.state
+
+    selected_questions: list[Question] = []
+    if selection_mode == "manual":
+        question_ids: list[int] = []
+        for raw_id in request.form.getlist("question_ids"):
+            try:
+                question_ids.append(int(raw_id))
+            except (TypeError, ValueError):
+                continue
+        if not question_ids:
+            flash("Select at least one question for the paper.", "warning")
+            return
+        questions = Question.query.filter(Question.id.in_(question_ids)).all()
+        lookup = {question.id: question for question in questions}
+        for qid in question_ids:
+            question = lookup.get(qid)
+            if not question:
+                continue
+            if question.state_scope not in {"ALL", state}:
+                continue
+            selected_questions.append(question)
+        if not selected_questions:
+            flash("Selected questions do not match the chosen state.", "warning")
+            return
+    elif selection_mode == "auto":
+        try:
+            count = int(request.form.get("auto_count", "10"))
+        except ValueError:
+            count = 10
+        count = max(1, min(count, 50))
+        topic_filter = (request.form.get("auto_topic") or "").strip()
+        query = _question_base_query(state if state != "ALL" else None)
+        if topic_filter:
+            query = query.filter(Question.topic.ilike(f"%{topic_filter}%"))
+        pool = query.all()
+        if not pool:
+            flash("No questions available for the selected filters.", "warning")
+            return
+        if len(pool) <= count:
+            selected_questions = pool
+        else:
+            selected_questions = random.sample(pool, count)
+    else:
+        flash("Unknown exam creation mode.", "danger")
+        return
+
+    paper = MockExamPaper(state=state, title=title, time_limit_minutes=time_limit)
+    db.session.add(paper)
+    db.session.flush()
+    for position, question in enumerate(selected_questions, start=1):
+        db.session.add(
+            MockExamPaperQuestion(
+                paper_id=paper.id,
+                question_id=question.id,
+                position=position,
+            )
+        )
+    db.session.commit()
+    flash("Exam paper created successfully.", "success")
+
+
+def _handle_exam_delete_action() -> None:
+    try:
+        paper_id = int(request.form.get("paper_id", ""))
+    except (TypeError, ValueError):
+        flash("Invalid exam identifier.", "warning")
+        return
+    paper = db.session.get(MockExamPaper, paper_id)
+    if not paper:
+        flash("Exam paper not found.", "danger")
+        return
+    if not current_user.is_admin and paper.state != current_user.state:
+        flash("You do not have permission to remove this paper.", "danger")
+        return
+    db.session.delete(paper)
+    db.session.commit()
+    flash("Exam paper removed.", "info")
+
+
+@coach_bp.route("/exams", methods=["GET", "POST"])
+@login_required
+def exams():
+    if request.method == "POST":
+        action = request.form.get("action")
+        if action == "upload_questions":
+            _handle_question_upload_action()
+        elif action == "create_exam":
+            _handle_exam_creation_action()
+        elif action == "delete_exam":
+            _handle_exam_delete_action()
+        else:
+            flash("Unknown action.", "danger")
+        return redirect(url_for("coach.exams"))
+
+    selected_state = request.args.get("state") if current_user.is_admin else current_user.state
+    if not selected_state:
+        selected_state = current_user.state if not current_user.is_admin else "ALL"
+    if selected_state not in STATE_CHOICES and selected_state != "ALL":
+        selected_state = current_user.state if not current_user.is_admin else "ALL"
+
+    paper_query = MockExamPaper.query.order_by(MockExamPaper.id.desc())
+    if selected_state != "ALL":
+        paper_query = paper_query.filter_by(state=selected_state)
+    elif not current_user.is_admin:
+        paper_query = paper_query.filter_by(state=current_user.state)
+    papers = paper_query.all()
+
+    question_state = None if selected_state == "ALL" else selected_state
+    available_questions = _question_base_query(question_state).limit(300).all()
+
+    return render_template(
+        "coach/exams.html",
+        papers=papers,
+        available_questions=available_questions,
+        state_choices=STATE_CHOICES,
+        selected_state=selected_state,
+        language_choices=LANGUAGE_CHOICES,
+    )
+def _parse_upload_headers(header_row: tuple) -> dict[int, str]:
+    header_mapping = {
+        "QID": "qid",
+        "题目编号": "qid",
+        "PROMPT": "prompt",
+        "题干": "prompt",
+        "OPTION A": "option_a",
+        "选项A": "option_a",
+        "OPTION B": "option_b",
+        "选项B": "option_b",
+        "OPTION C": "option_c",
+        "选项C": "option_c",
+        "OPTION D": "option_d",
+        "选项D": "option_d",
+        "CORRECT OPTION": "correct_option",
+        "答案": "correct_option",
+        "TOPIC": "topic",
+        "考点类型": "topic",
+        "EXPLANATION": "explanation",
+        "解析": "explanation",
+        "STATE SCOPE": "state_scope",
+        "适用州": "state_scope",
+        "LANGUAGE": "language",
+        "语言": "language",
+        "IMAGE URL": "image_url",
+        "配图": "image_url",
+    }
+    column_map: dict[int, str] = {}
+    for index, value in enumerate(header_row):
+        if not value:
+            continue
+        label = str(value).strip().upper()
+        field = header_mapping.get(label)
+        if field:
+            column_map[index] = field
+    return column_map
+
+
+def _import_question_bank(file_stream, *, default_state: str, default_language: str) -> tuple[int, int]:
+    try:
+        from openpyxl import load_workbook  # type: ignore
+    except ImportError as exc:  # pragma: no cover - optional dependency
+        raise ValueError(
+            "Excel support requires the 'openpyxl' package. Install it with 'pip install openpyxl'."
+        ) from exc
+
+    try:
+        workbook = load_workbook(file_stream, data_only=True)
+    except Exception as exc:  # pragma: no cover - defensive
+        raise ValueError(f"Unable to read Excel file: {exc}")
+
+    sheet = workbook.active
+    header_row = next(sheet.iter_rows(min_row=1, max_row=1, values_only=True), None)
+    if not header_row:
+        raise ValueError("Upload is missing a header row.")
+
+    column_map = _parse_upload_headers(header_row)
+    required_fields = {"prompt", "option_a", "option_b", "option_c", "option_d", "correct_option"}
+    if not required_fields.issubset(set(column_map.values())):
+        raise ValueError("Excel header must include prompt, options, and correct option columns.")
+
+    created = 0
+    updated = 0
+
+    for row in sheet.iter_rows(min_row=2, values_only=True):
+        if not row or not any(row):
+            continue
+        record: dict[str, str] = {}
+        for index, value in enumerate(row):
+            field = column_map.get(index)
+            if not field or value is None:
+                continue
+            record[field] = str(value).strip()
+
+        prompt = record.get("prompt")
+        correct_option = (record.get("correct_option") or "").strip().upper()
+        if not prompt or correct_option not in VALID_OPTIONS:
+            continue
+
+        qid = record.get("qid") or f"EXCEL-{uuid4().hex[:10].upper()}"
+        topic = record.get("topic") or "general"
+        explanation = record.get("explanation") or ""
+        state_scope = (record.get("state_scope") or default_state or "ALL").upper()
+        language = (record.get("language") or default_language or "ENGLISH").upper()
+        image_url = record.get("image_url") or None
+
+        option_a = record.get("option_a") or "Option A"
+        option_b = record.get("option_b") or "Option B"
+        option_c = record.get("option_c") or "Option C"
+        option_d = record.get("option_d") or "Option D"
+
+        question = Question.query.filter_by(qid=qid, state_scope=state_scope, language=language).first()
+        if not question:
+            question = Question(
+                qid=qid,
+                prompt=prompt,
+                state_scope=state_scope,
+                language=language,
+                topic=topic,
+                option_a=option_a,
+                option_b=option_b,
+                option_c=option_c,
+                option_d=option_d,
+                correct_option=correct_option,
+                explanation=explanation,
+                image_url=image_url,
+            )
+            db.session.add(question)
+            created += 1
+        else:
+            question.prompt = prompt
+            question.topic = topic
+            question.option_a = option_a
+            question.option_b = option_b
+            question.option_c = option_c
+            question.option_d = option_d
+            question.correct_option = correct_option
+            question.explanation = explanation
+            question.image_url = image_url
+            updated += 1
+
+    db.session.commit()
+    return created, updated

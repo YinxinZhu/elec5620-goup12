@@ -35,7 +35,7 @@ class Coach(AccountUserMixin, db.Model):
     mobile_number = db.Column("phone", db.String(20), unique=True, nullable=False)
     city = db.Column(db.String(100), nullable=False)
     state = db.Column(db.String(10), nullable=False)
-    vehicle_types = db.Column(db.String(20), nullable=False)  # comma separated AT/MT
+    vehicle_types = db.Column(db.String(20), nullable=False)
     bio = db.Column(db.Text)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     updated_at = db.Column(
@@ -53,7 +53,18 @@ class Coach(AccountUserMixin, db.Model):
         return check_password_hash(self.password_hash, password)
 
     def vehicle_type_list(self) -> list[str]:
-        return [v.strip() for v in self.vehicle_types.split(",") if v.strip()]
+        """Return the stored vehicle type in list form for backwards compatibility."""
+
+        if not self.vehicle_types:
+            return []
+        if "," not in self.vehicle_types:
+            return [self.vehicle_types]
+        return [value for value in (v.strip() for v in self.vehicle_types.split(",")) if value]
+
+    @property
+    def vehicle_type(self) -> str | None:
+        types = self.vehicle_type_list()
+        return types[0] if types else None
 
     @property
     def is_admin(self) -> bool:

@@ -30,6 +30,16 @@ from ..services.progress import (
     export_state_progress_csv,
     get_progress_summary,
 )
+from ..services.mock_exam_sessions import (
+    ExamQuestionScopeError,
+    ExamRuleMissingError,
+    ExamSessionConflictError,
+    ensure_session_active,
+    record_answer,
+    session_questions,
+    start_session,
+    submit_session,
+)
 from ..services.state_management import (
     StateSwitchError,
     StateSwitchValidationError,
@@ -152,18 +162,16 @@ def _questions_payload(student: Student, *, state: str, topic: str | None = None
     return payload
 
 
-def _session_questions(session: StudentExamSession) -> list[dict[str, Any]]:
-    ordered = sorted(session.paper.questions, key=lambda pq: pq.position)
-    answer_lookup = {answer.question_id: answer for answer in session.answers}
+def _serialise_session_questions(session: StudentExamSession) -> list[dict[str, Any]]:
     items: list[dict[str, Any]] = []
-    for paper_question in ordered:
-        question = paper_question.question
-        answer = answer_lookup.get(question.id)
+    for payload in session_questions(session):
+        question = payload.question
+        answer = payload.answer
         items.append(
             {
                 "questionId": question.id,
                 "qid": question.qid,
-                "position": paper_question.position,
+                "position": payload.position,
                 "prompt": question.prompt,
                 "topic": question.topic,
                 "options": {
@@ -179,64 +187,6 @@ def _session_questions(session: StudentExamSession) -> list[dict[str, Any]]:
             }
         )
     return items
-
-
-def _ensure_session_active(session: StudentExamSession) -> StudentExamSession:
-    if (
-        session.status == "ongoing"
-        and session.expires_at
-        and datetime.utcnow() >= session.expires_at
-    ):
-        _finalise_session(session, auto=True)
-    return session
-
-
-def _finalise_session(session: StudentExamSession, *, auto: bool) -> None:
-    if session.status != "ongoing":
-        return
-
-    now = datetime.utcnow()
-    ordered = sorted(session.paper.questions, key=lambda pq: pq.position)
-    answer_lookup = {answer.question_id: answer for answer in session.answers}
-    score = 0
-    wrong_questions: list[Question] = []
-
-    for paper_question in ordered:
-        question = paper_question.question
-        answer = answer_lookup.get(question.id)
-        if answer and answer.is_correct:
-            score += 1
-        else:
-            wrong_questions.append(question)
-
-    session.status = "submitted"
-    session.finished_at = now
-    session.score = score
-    session.total_questions = session.total_questions or len(ordered)
-
-    summary = MockExamSummary(student_id=session.student_id, state=session.state, score=score)
-    db.session.add(summary)
-
-    for question in wrong_questions:
-        entry = (
-            NotebookEntry.query.filter_by(
-                student_id=session.student_id, question_id=question.id, state=session.state
-            ).first()
-        )
-        if not entry:
-            entry = NotebookEntry(
-                student_id=session.student_id,
-                question_id=question.id,
-                state=session.state,
-                wrong_count=1,
-                last_wrong_at=now,
-            )
-            db.session.add(entry)
-        else:
-            entry.wrong_count += 1
-            entry.last_wrong_at = now
-
-    db.session.commit()
 
 
 def _collect_student_answers(
@@ -919,47 +869,19 @@ def start_mock_exam():
     if not paper:
         return _json_error("Exam paper not available for current state.", 404)
 
-    existing = (
-        StudentExamSession.query.filter_by(student_id=student.id, status="ongoing")
-        .order_by(StudentExamSession.started_at.desc())
-        .first()
-    )
-    if existing and existing.paper_id != paper.id:
-        return _json_error("Finish the current exam before starting a new one.", 409)
+    try:
+        result = start_session(student, paper)
+    except ExamSessionConflictError as exc:
+        return _json_error(str(exc), 409)
 
-    if existing:
-        session = _ensure_session_active(existing)
-        if session.status == "submitted":
-            existing = None
-        else:
-            return jsonify(
-                {
-                    "sessionId": session.id,
-                    "status": session.status,
-                    "startedAt": session.started_at.isoformat(),
-                    "expiresAt": session.expires_at.isoformat() if session.expires_at else None,
-                    "questions": _session_questions(session),
-                }
-            )
-
-    now = datetime.utcnow()
-    session = StudentExamSession(
-        student_id=student.id,
-        state=student.state,
-        paper_id=paper.id,
-        expires_at=now + timedelta(minutes=paper.time_limit_minutes),
-        total_questions=len(paper.questions),
-    )
-    db.session.add(session)
-    db.session.commit()
-
+    session = result.session
     return jsonify(
         {
             "sessionId": session.id,
             "status": session.status,
             "startedAt": session.started_at.isoformat(),
             "expiresAt": session.expires_at.isoformat() if session.expires_at else None,
-            "questions": _session_questions(session),
+            "questions": _serialise_session_questions(session),
         }
     )
 
@@ -969,7 +891,7 @@ def start_mock_exam():
 def answer_question(session_id: int):
     student: Student = g.current_student
     session = StudentExamSession.query.filter_by(id=session_id, student_id=student.id).first_or_404()
-    session = _ensure_session_active(session)
+    session = ensure_session_active(session)
     if session.status != "ongoing":
         return _json_error("Exam session already finished.", 409)
 
@@ -979,31 +901,17 @@ def answer_question(session_id: int):
     if question_id is None or selected_option not in VALID_OPTIONS:
         return _json_error("questionId and a valid selectedOption are required.")
 
-    paper_question = next((pq for pq in session.paper.questions if pq.question_id == question_id), None)
-    if not paper_question:
+    try:
+        answer = record_answer(session, question_id, selected_option)
+    except ExamQuestionScopeError:
         return _json_error("Question not part of this exam.", 404)
 
-    question = paper_question.question
-    answer = StudentExamAnswer.query.filter_by(
-        session_id=session.id, question_id=question_id
-    ).first()
-    is_correct = selected_option == question.correct_option
-    if not answer:
-        answer = StudentExamAnswer(
-            session_id=session.id,
-            question_id=question_id,
-            selected_option=selected_option,
-            is_correct=is_correct,
-        )
-        db.session.add(answer)
-    else:
-        answer.selected_option = selected_option
-        answer.is_correct = is_correct
-        answer.answered_at = datetime.utcnow()
-
-    db.session.commit()
-
-    return jsonify({"saved": True, "isCorrect": is_correct if session.status == "submitted" else None})
+    return jsonify(
+        {
+            "saved": True,
+            "isCorrect": answer.is_correct if session.status == "submitted" else None,
+        }
+    )
 
 
 @api_bp.post("/mock-exams/sessions/<int:session_id>/submit")
@@ -1011,26 +919,17 @@ def answer_question(session_id: int):
 def submit_mock_exam(session_id: int):
     student: Student = g.current_student
     session = StudentExamSession.query.filter_by(id=session_id, student_id=student.id).first_or_404()
-    _ensure_session_active(session)
-    if session.status == "submitted":
-        rule = _ensure_exam_rule(session.state)
-        return jsonify(
-            {
-                "score": session.score,
-                "total": session.total_questions,
-                "passMark": rule.pass_mark,
-                "passed": (session.score or 0) >= rule.pass_mark if session.score is not None else False,
-            }
-        )
+    try:
+        result = submit_session(session)
+    except ExamRuleMissingError as exc:
+        return _json_error(str(exc))
 
-    _finalise_session(session, auto=False)
-    rule = _ensure_exam_rule(session.state)
     return jsonify(
         {
-            "score": session.score,
-            "total": session.total_questions,
-            "passMark": rule.pass_mark,
-            "passed": (session.score or 0) >= rule.pass_mark if session.score is not None else False,
+            "score": result.score,
+            "total": result.total,
+            "passMark": result.pass_mark,
+            "passed": result.passed,
         }
     )
 
@@ -1070,7 +969,7 @@ def list_sessions():
 def get_session(session_id: int):
     student: Student = g.current_student
     session = StudentExamSession.query.filter_by(id=session_id, student_id=student.id).first_or_404()
-    session = _ensure_session_active(session)
+    session = ensure_session_active(session)
     rule = _ensure_exam_rule(session.state)
     return jsonify(
         {
@@ -1083,6 +982,6 @@ def get_session(session_id: int):
             "startedAt": session.started_at.isoformat(),
             "finishedAt": session.finished_at.isoformat() if session.finished_at else None,
             "expiresAt": session.expires_at.isoformat() if session.expires_at else None,
-            "questions": _session_questions(session),
+            "questions": _serialise_session_questions(session),
         }
     )
