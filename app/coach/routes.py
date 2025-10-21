@@ -146,7 +146,6 @@ def login():
     return render_template(
         "coach/login.html",
         state_choices=STATE_CHOICES,
-        language_choices=LANGUAGE_CHOICES,
     )
 
 

@@ -116,8 +116,10 @@
             <div class="col-sm-6">
               <label for="student_preferred_language" class="form-label">{{ _('Preferred language') }}</label>
               <select class="form-select" id="student_preferred_language" name="student_preferred_language">
-                {% for lang in language_choices %}
-                <option value="{{ lang }}">{{ _(lang.title()) }}</option>
+                {% for option in language_choices %}
+                <option value="{{ option.code }}"{% if option.code == active_language %} selected{% endif %}>
+                  {{ option.label }}
+                </option>
                 {% endfor %}
               </select>
             </div>
