@@ -17,6 +17,7 @@ from app.db_maintenance import (
     DEFAULT_ADMIN_MOBILE_NUMBER,
     ensure_admin_support,
     ensure_database_schema,
+    ensure_question_language_support,
     ensure_student_mobile_column,
 )
 from app.models import Coach
@@ -43,6 +44,48 @@ def legacy_engine():
 def coach_engine():
     engine = create_engine("sqlite://")
     Coach.__table__.create(bind=engine)
+    return engine
+
+
+@pytest.fixture()
+def legacy_questions_engine():
+    engine = create_engine("sqlite://")
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "CREATE TABLE questions ("
+                "id INTEGER PRIMARY KEY AUTOINCREMENT,"
+                "qid VARCHAR(50) NOT NULL,"
+                "prompt TEXT NOT NULL,"
+                "state_scope VARCHAR(10) NOT NULL,"
+                "topic VARCHAR(120) NOT NULL DEFAULT 'general',"
+                "option_a VARCHAR(255) NOT NULL,"
+                "option_b VARCHAR(255) NOT NULL,"
+                "option_c VARCHAR(255) NOT NULL,"
+                "option_d VARCHAR(255) NOT NULL,"
+                "correct_option VARCHAR(1) NOT NULL,"
+                "explanation TEXT NOT NULL DEFAULT '',"
+                "image_url VARCHAR(500)"
+                ")"
+            )
+        )
+        conn.execute(
+            text(
+                "CREATE UNIQUE INDEX uq_question_qid_state_scope "
+                "ON questions (qid, state_scope)"
+            )
+        )
+        conn.execute(
+            text(
+                "INSERT INTO questions ("
+                "qid, prompt, state_scope, topic, option_a, option_b, option_c, option_d, "
+                "correct_option, explanation"
+                ") VALUES ("
+                ":qid, 'Prompt', :state, 'general', 'A', 'B', 'C', 'D', 'A', ''"
+                ")"
+            ),
+            {"qid": "Q1", "state": "NSW"},
+        )
     return engine
 
 
@@ -134,6 +177,63 @@ def test_ensure_admin_support_is_idempotent(coach_engine):
 
     assert admin_count == 1
     assert coach_count == 1
+
+
+def test_ensure_question_language_support_upgrades_schema(legacy_questions_engine):
+    logger = logging.getLogger("test_ensure_question_language_support_upgrades_schema")
+
+    ensure_question_language_support(legacy_questions_engine, logger)
+
+    inspector = inspect(legacy_questions_engine)
+    columns = {column["name"] for column in inspector.get_columns("questions")}
+    assert "language" in columns
+
+    with legacy_questions_engine.begin() as conn:
+        existing = conn.execute(
+            text(
+                "SELECT qid, state_scope, language FROM questions ORDER BY id"
+            )
+        ).all()
+
+    assert existing == [("Q1", "NSW", "ENGLISH")]
+
+    with legacy_questions_engine.begin() as conn:
+        conn.execute(
+            text(
+                "INSERT INTO questions ("
+                "qid, prompt, state_scope, topic, option_a, option_b, option_c, option_d, "
+                "correct_option, explanation, language"
+                ") VALUES ("
+                ":qid, 'Prompt', :state, 'general', 'A', 'B', 'C', 'D', 'A', '', :lang"
+                ")"
+            ),
+            {"qid": "Q1", "state": "NSW", "lang": "HINDI"},
+        )
+
+    with pytest.raises(IntegrityError):
+        with legacy_questions_engine.begin() as conn:
+            conn.execute(
+                text(
+                    "INSERT INTO questions ("
+                    "qid, prompt, state_scope, topic, option_a, option_b, option_c, option_d, "
+                    "correct_option, explanation, language"
+                    ") VALUES ("
+                    ":qid, 'Prompt', :state, 'general', 'A', 'B', 'C', 'D', 'A', '', :lang"
+                    ")"
+                ),
+                {"qid": "Q1", "state": "NSW", "lang": "ENGLISH"},
+            )
+
+
+def test_ensure_question_language_support_is_idempotent(legacy_questions_engine):
+    logger = logging.getLogger("test_ensure_question_language_support_is_idempotent")
+
+    ensure_question_language_support(legacy_questions_engine, logger)
+    ensure_question_language_support(legacy_questions_engine, logger)
+
+    inspector = inspect(legacy_questions_engine)
+    columns = {column["name"] for column in inspector.get_columns("questions")}
+    assert "language" in columns
 
 
 def test_ensure_database_schema_populates_core_tables(tmp_path):
