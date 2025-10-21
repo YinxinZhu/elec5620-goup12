@@ -1,16 +1,47 @@
 {% extends 'base.html' %}
-{% block title %}Portal Login{% endblock %}
+{% block title %}{{ _('Portal Login') }}{% endblock %}
 {% block body_class %}auth-body{% endblock %}
-{% block navbar %}{% endblock %}
+{% block navbar %}
+<nav class="auth-language-nav">
+  <form method="post" action="{{ url_for('switch_language') }}" class="language-switcher">
+    <input type="hidden" name="next" value="{{ request.full_path }}">
+    <div class="dropdown">
+      <button
+        class="btn btn-light btn-sm dropdown-toggle language-toggle"
+        type="button"
+        id="authLanguageDropdown"
+        data-bs-toggle="dropdown"
+        aria-expanded="false"
+      >
+        {{ language_label(active_language) }}
+      </button>
+      <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="authLanguageDropdown">
+        {% for option in language_choices %}
+        <li>
+          <button
+            class="dropdown-item{% if option.code == active_language %} active{% endif %}"
+            type="submit"
+            name="language"
+            value="{{ option.code }}"
+          >
+            {{ option.icon }} {{ option.label }}
+          </button>
+        </li>
+        {% endfor %}
+      </ul>
+    </div>
+  </form>
+</nav>
+{% endblock %}
 {% block main_class %}auth-container{% endblock %}
 {% block content %}
 <div class="auth-panel">
   <div class="auth-avatar" aria-hidden="true">👤</div>
-  <h1 class="auth-title">Sign in to the portal</h1>
-  <p class="auth-subtitle">Use your registered mobile number and password to access the administrator, coach, or learner experience.</p>
+  <h1 class="auth-title">{{ _('Sign in to the portal') }}</h1>
+  <p class="auth-subtitle">{{ _('Use your registered mobile number and password to access the administrator, coach, or learner experience.') }}</p>
   <form method="post" novalidate>
     <div class="mb-3">
-      <label class="form-label visually-hidden" for="mobile_number">Mobile number</label>
+      <label class="form-label visually-hidden" for="mobile_number">{{ _('Mobile number') }}</label>
       <div class="input-group">
         <span class="input-group-text" aria-hidden="true">📱</span>
         <input
@@ -19,13 +50,13 @@
           id="mobile_number"
           name="mobile_number"
           value="{{ request.form.get('mobile_number', '') }}"
-          placeholder="Mobile number"
+          placeholder="{{ _('Mobile number') }}"
           required
         >
       </div>
     </div>
     <div class="mb-4">
-      <label class="form-label visually-hidden" for="password">Password</label>
+      <label class="form-label visually-hidden" for="password">{{ _('Password') }}</label>
       <div class="input-group">
         <span class="input-group-text" aria-hidden="true">🔒</span>
         <input
@@ -33,19 +64,19 @@
           class="form-control auth-input"
           id="password"
           name="password"
-          placeholder="Password"
+          placeholder="{{ _('Password') }}"
           required
         >
       </div>
     </div>
     <div class="d-flex align-items-center">
-      <button type="submit" class="btn btn-primary flex-grow-1 auth-login-button">Sign in</button>
+      <button type="submit" class="btn btn-primary flex-grow-1 auth-login-button">{{ _('Sign in') }}</button>
       <button
         type="button"
         class="btn btn-link auth-register-link ms-3"
         data-bs-toggle="modal"
         data-bs-target="#studentRegistrationModal"
-      >Register learner account</button>
+      >{{ _('Register learner account') }}</button>
     </div>
   </form>
 </div>
@@ -54,55 +85,57 @@
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content">
       <div class="modal-header">
-        <h2 class="h5 modal-title" id="studentRegistrationLabel">Register a learner account</h2>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        <h2 class="h5 modal-title" id="studentRegistrationLabel">{{ _('Register a learner account') }}</h2>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{{ _('Close') }}"></button>
       </div>
       <div class="modal-body">
-        <p class="text-muted small">Complete the form below to create a learner account. After registration we will sign you in automatically.</p>
+        <p class="text-muted small">{{ _('Complete the form below to create a learner account. After registration we will sign you in automatically.') }}</p>
         <form method="post" action="{{ url_for('coach.register_student') }}" novalidate>
           <div class="mb-3">
-            <label for="student_name" class="form-label">Full name</label>
+            <label for="student_name" class="form-label">{{ _('Full name') }}</label>
             <input type="text" class="form-control" id="student_name" name="student_name" required>
           </div>
           <div class="mb-3">
-            <label for="student_mobile_number" class="form-label">Mobile number</label>
+            <label for="student_mobile_number" class="form-label">{{ _('Mobile number') }}</label>
             <input type="tel" class="form-control" id="student_mobile_number" name="student_mobile_number" required>
           </div>
           <div class="mb-3">
-            <label for="student_email" class="form-label">Email <span class="text-muted">(optional)</span></label>
+            <label for="student_email" class="form-label">{{ _('Email') }} <span class="text-muted">{{ _('(optional)') }}</span></label>
             <input type="email" class="form-control" id="student_email" name="student_email" placeholder="name@example.com">
           </div>
           <div class="row g-3">
             <div class="col-sm-6">
-              <label for="student_state" class="form-label">State or territory</label>
+              <label for="student_state" class="form-label">{{ _('State or territory') }}</label>
               <select class="form-select" id="student_state" name="student_state" required>
-                <option value="" disabled selected>Select your state</option>
+                <option value="" disabled selected>{{ _('Select your state') }}</option>
                 {% for state in state_choices %}
                 <option value="{{ state }}">{{ state }}</option>
                 {% endfor %}
               </select>
             </div>
             <div class="col-sm-6">
-              <label for="student_preferred_language" class="form-label">Preferred language</label>
+              <label for="student_preferred_language" class="form-label">{{ _('Preferred language') }}</label>
               <select class="form-select" id="student_preferred_language" name="student_preferred_language">
-                {% for lang in language_choices %}
-                <option value="{{ lang }}">{{ lang.title() }}</option>
+                {% for option in language_choices %}
+                <option value="{{ option.code }}"{% if option.code == active_language %} selected{% endif %}>
+                  {{ option.label }}
+                </option>
                 {% endfor %}
               </select>
             </div>
           </div>
           <div class="row g-3 mt-1">
             <div class="col-sm-6">
-              <label for="student_password" class="form-label">Password</label>
+              <label for="student_password" class="form-label">{{ _('Password') }}</label>
               <input type="password" class="form-control" id="student_password" name="student_password" required>
             </div>
             <div class="col-sm-6">
-              <label for="student_confirm_password" class="form-label">Confirm password</label>
+              <label for="student_confirm_password" class="form-label">{{ _('Confirm password') }}</label>
               <input type="password" class="form-control" id="student_confirm_password" name="student_confirm_password" required>
             </div>
           </div>
           <div class="d-flex justify-content-end mt-4">
-            <button type="submit" class="btn btn-primary">Submit registration</button>
+            <button type="submit" class="btn btn-primary">{{ _('Submit registration') }}</button>
           </div>
         </form>
       </div>

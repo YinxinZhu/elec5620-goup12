@@ -7,6 +7,7 @@ from datetime import datetime
 from sqlalchemy import func, or_
 
 from .. import db
+from ..i18n import ensure_language_code
 from ..models import (
     Coach,
     ExamRule,
@@ -104,14 +105,16 @@ def switch_student_state(
     return _format_rule_summary(desired_state, rule)
 
 
-def get_questions_for_state(state_code: str) -> list[Question]:
+def get_questions_for_state(state_code: str, *, language: str | None = None) -> list[Question]:
     """Return the deduplicated question bank for the given state."""
 
     state = _normalise_state_code(state_code)
+    language_code = ensure_language_code(language)
     questions = (
         Question.query.filter(
             or_(Question.state_scope == state, Question.state_scope == "ALL")
         )
+        .filter(Question.language == language_code)
         .order_by(Question.qid.asc())
         .all()
     )

@@ -1,20 +1,20 @@
 {% extends 'base.html' %}
-{% block title %}Student Dashboard{% endblock %}
+{% block title %}{{ _('Student Dashboard') }}{% endblock %}
 {% block content %}
-<h1 class="h4 mb-4">Learner Dashboard</h1>
-<p class="text-muted">Welcome back, {{ current_user.name }}. Track your bookings and latest practice progress below.</p>
+<h1 class="h4 mb-4">{{ _('Learner Dashboard') }}</h1>
+<p class="text-muted">{{ _('Welcome back, {name}. Track your bookings and latest practice progress below.').format(name=current_user.name) }}</p>
 
 <section class="mb-5">
-  <h2 class="h5">Upcoming sessions</h2>
+  <h2 class="h5">{{ _('Upcoming sessions') }}</h2>
   {% if upcoming_appointments %}
   <div class="table-responsive">
     <table class="table table-striped align-middle">
       <thead>
         <tr>
-          <th scope="col">Start</th>
-          <th scope="col">Coach</th>
-          <th scope="col">Location</th>
-          <th scope="col">Status</th>
+          <th scope="col">{{ _('Start') }}</th>
+          <th scope="col">{{ _('Coach') }}</th>
+          <th scope="col">{{ _('Location') }}</th>
+          <th scope="col">{{ _('Status') }}</th>
         </tr>
       </thead>
       <tbody>
@@ -31,19 +31,19 @@
   </div>
   {% else %}
   <div class="alert alert-info" role="alert">
-    You have no upcoming sessions booked. Check with your coach to schedule one.
+    {{ _('You have no upcoming sessions booked. Check with your coach to schedule one.') }}
   </div>
   {% endif %}
 </section>
 
 <section>
-  <h2 class="h5">Recent practice summary</h2>
+  <h2 class="h5">{{ _('Recent practice summary') }}</h2>
   {% if latest_summary %}
-  <p class="mb-1">Last mock exam score: <strong>{{ latest_summary.score }}%</strong></p>
-  <p class="text-muted">Attempted on {{ latest_summary.taken_at.strftime('%d %b %Y') }}.</p>
+  <p class="mb-1">{{ _('Last mock exam score:') }} <strong>{{ latest_summary.score }}%</strong></p>
+  <p class="text-muted">{{ _('Attempted on {date}.').format(date=latest_summary.taken_at.strftime('%d %b %Y')) }}</p>
   {% else %}
   <div class="alert alert-secondary" role="alert">
-    Complete a mock exam in the learner app to see your progress here.
+    {{ _('Complete a mock exam in the learner app to see your progress here.') }}
   </div>
   {% endif %}
 </section>

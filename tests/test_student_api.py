@@ -44,6 +44,7 @@ def seeded_app():
                 option_d="D",
                 correct_option="B",
                 explanation="Two second rule",
+                language="ENGLISH",
             ),
             Question(
                 qid="NSW-1",
@@ -56,6 +57,7 @@ def seeded_app():
                 option_d="D",
                 correct_option="C",
                 explanation="State rule",
+                language="ENGLISH",
             ),
             Question(
                 qid="NSW-2",
@@ -68,6 +70,7 @@ def seeded_app():
                 option_d="D",
                 correct_option="A",
                 explanation="Extra",
+                language="ENGLISH",
             ),
             Question(
                 qid="VIC-1",
@@ -80,6 +83,7 @@ def seeded_app():
                 option_d="D",
                 correct_option="A",
                 explanation="VIC",
+                language="ENGLISH",
             ),
         ]
         db.session.add_all(questions)

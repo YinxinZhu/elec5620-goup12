@@ -134,3 +134,27 @@ body {
 .auth-modal .modal-body {
   padding-top: 0;
 }
+
+.language-switcher {
+  margin: 0;
+}
+
+.language-switcher .dropdown-menu button.active {
+  font-weight: 600;
+}
+
+.language-toggle {
+  border-radius: 999px;
+  padding: 0.35rem 1rem;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.auth-language-nav {
+  position: absolute;
+  top: 1.5rem;
+  right: 1.5rem;
+  z-index: 10;
+}
