@@ -62,13 +62,8 @@ body {
 .auth-title {
   font-weight: 600;
   text-align: center;
-  margin-bottom: 0.75rem;
-}
-
-.auth-subtitle {
-  text-align: center;
-  color: #5f6b7a;
-  margin-bottom: 2rem;
+  margin-bottom: 1.5rem;
+  font-size: 1.75rem;
 }
 
 .auth-input {
@@ -104,22 +99,37 @@ body {
   color: #2c5282;
 }
 
-.auth-login-button {
-  border-radius: 999px;
+.auth-actions {
+  display: flex;
+  align-items: stretch;
+  gap: 1rem;
+  margin-top: 1.5rem;
+}
+
+.auth-actions .btn {
+  flex: 1 1 0;
+  border-radius: 0.75rem;
   padding: 0.75rem 1rem;
   font-weight: 600;
 }
 
-.auth-register-link {
-  font-weight: 600;
-  color: #2c5282;
-  text-decoration: none;
+.auth-register-button {
+  color: #1f2937;
+  border-color: #d1d5db;
+  background-color: rgba(255, 255, 255, 0.8);
 }
 
-.auth-register-link:hover,
-.auth-register-link:focus {
-  color: #1a365d;
-  text-decoration: underline;
+.auth-register-button:hover,
+.auth-register-button:focus {
+  color: #111827;
+  background-color: #e5e7eb;
+  border-color: #cbd5f5;
+}
+
+.auth-login-button {
+  border-radius: 0.75rem;
+  padding: 0.75rem 1rem;
+  font-weight: 600;
 }
 
 .auth-modal .modal-content {
