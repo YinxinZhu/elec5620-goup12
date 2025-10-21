@@ -51,6 +51,13 @@ def _parse_vehicle_types(values: Iterable[str]) -> str:
     return ",".join(sorted(cleaned))
 
 
+def _normalize_mobile(raw_value: str) -> str:
+    digits = "".join(ch for ch in raw_value if ch.isdigit())
+    if digits:
+        return digits
+    return raw_value.strip()
+
+
 def _require_admin_access():
     if not current_user.is_admin:
         flash("Only administrators may access personnel management.", "danger")

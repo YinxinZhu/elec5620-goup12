@@ -127,6 +127,12 @@ Refer to `tests/test_student_api.py` for end-to-end usage examples.
 pytest
 ```
 
+To collect coverage details:
+
+```bash
+pytest --cov=app --cov-report=term-missing
+```
+
 ## Database maintenance
 
 `app.db_maintenance.ensure_database_schema` applies safe, idempotent checks when
