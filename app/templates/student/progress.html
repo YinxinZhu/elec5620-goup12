@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block title %}{{ _('Study progress') }} · {{ super() }}{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3 mb-4">
+  <div>
+    <h1 class="h3 mb-1">{{ _('Study progress') }}</h1>
+    <p class="text-muted mb-0">{{ _('Track your practice and mock-exam results for each state.') }}</p>
+  </div>
+  {% if export_url %}
+  <a class="btn btn-outline-secondary" href="{{ export_url }}">{{ _('Export CSV') }}</a>
+  {% endif %}
+</div>
+
+{% if available_states %}
+<form method="get" class="row gy-2 gx-3 align-items-end mb-4">
+  <div class="col-sm-auto">
+    <label for="state" class="form-label">{{ _('State / Territory') }}</label>
+    <select id="state" name="state" class="form-select" onchange="this.form.submit()">
+      {% for state_code in available_states %}
+      <option value="{{ state_code }}" {% if state_code == selected_state %}selected{% endif %}>{{ state_code }}</option>
+      {% endfor %}
+    </select>
+  </div>
+</form>
+{% endif %}
+
+{% if error_message %}
+<div class="alert alert-danger" role="alert">{{ _(error_message) }}</div>
+{% elif summary %}
+  <div class="row g-3 mb-4">
+    {% set cards = [
+      ('total', _('Total questions'), summary.total),
+      ('done', _('Completed'), summary.done),
+      ('correct', _('Correct'), summary.correct),
+      ('wrong', _('Wrong answers logged'), summary.wrong),
+      ('pending', _('Pending'), summary.pending),
+      ('lastScore', _('Latest mock-exam score'), summary.last_score if summary.last_score is not none else '—')
+    ] %}
+    {% for _, label, value in cards %}
+    <div class="col-12 col-sm-6 col-lg-4 col-xxl-2">
+      <div class="card h-100">
+        <div class="card-body text-center">
+          <p class="text-uppercase small text-muted mb-1">{{ label }}</p>
+          <p class="display-6 fw-semibold mb-0">{{ value }}</p>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  {% if summary.total == 0 %}
+  <div class="alert alert-info" role="alert">{{ _('Start a practice to see progress.') }}</div>
+  {% else %}
+  <div class="card">
+    <div class="card-body">
+      <h2 class="h5 mb-4">{{ _('Overview') }}</h2>
+      <div class="mb-4">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <span class="fw-semibold">{{ _('Completion') }}</span>
+          <span class="text-muted">{{ summary.done }} / {{ summary.total }} · {{ completion_pct }}%</span>
+        </div>
+        <div class="progress" style="height: 12px;">
+          <div class="progress-bar bg-success" role="progressbar" style="width: {{ completion_pct }}%;" aria-valuenow="{{ completion_pct }}" aria-valuemin="0" aria-valuemax="100"></div>
+          <div class="progress-bar bg-light text-dark" role="progressbar" style="width: {{ pending_pct }}%;" aria-valuenow="{{ pending_pct }}" aria-valuemin="0" aria-valuemax="100"></div>
+        </div>
+      </div>
+      <div class="mb-0">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <span class="fw-semibold">{{ _('Accuracy') }}</span>
+          {% if summary.done %}
+          <span class="text-muted">{{ summary.correct }} / {{ summary.done }} · {{ accuracy_pct }}%</span>
+          {% else %}
+          <span class="text-muted">{{ _('No answered questions yet.') }}</span>
+          {% endif %}
+        </div>
+        <div class="progress" style="height: 12px;">
+          <div class="progress-bar bg-info" role="progressbar" style="width: {{ accuracy_pct }}%;" aria-valuenow="{{ accuracy_pct }}" aria-valuemin="0" aria-valuemax="100"></div>
+          <div class="progress-bar bg-warning" role="progressbar" style="width: {{ incorrect_pct }}%;" aria-valuenow="{{ incorrect_pct }}" aria-valuemin="0" aria-valuemax="100"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+{% else %}
+  <div class="alert alert-info" role="alert">{{ _('Switch to a state to load progress data.') }}</div>
+{% endif %}
+{% endblock %}
