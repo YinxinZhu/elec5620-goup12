@@ -12,7 +12,6 @@ from flask import (
     url_for,
 )
 from flask_login import current_user, login_required, login_user, logout_user
-from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from urllib.parse import urljoin, urlparse
 
@@ -50,6 +49,13 @@ def _parse_vehicle_types(values: Iterable[str]) -> str:
     allowed = {"AT", "MT"}
     cleaned = {v for v in (value.strip().upper() for value in values) if v in allowed}
     return ",".join(sorted(cleaned))
+
+
+def _normalize_mobile(raw_value: str) -> str:
+    digits = "".join(ch for ch in raw_value if ch.isdigit())
+    if digits:
+        return digits
+    return raw_value.strip()
 
 
 def _require_admin_access():
