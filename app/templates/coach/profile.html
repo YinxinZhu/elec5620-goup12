@@ -28,14 +28,14 @@
     </select>
   </div>
   <div class="col-12">
-    <span class="form-label d-block">Vehicle types</span>
-    {% set selected = current_user.vehicle_type_list() %}
+    <span class="form-label d-block">Transmission type</span>
+    {% set selected = current_user.vehicle_type %}
     <div class="form-check form-check-inline">
-      <input class="form-check-input" type="checkbox" id="vehicleAT" name="vehicle_types" value="AT" {% if 'AT' in selected %}checked{% endif %}>
+      <input class="form-check-input" type="radio" id="vehicleAT" name="vehicle_type" value="AT" {% if selected == 'AT' %}checked{% endif %} required>
       <label class="form-check-label" for="vehicleAT">Automatic (AT)</label>
     </div>
     <div class="form-check form-check-inline">
-      <input class="form-check-input" type="checkbox" id="vehicleMT" name="vehicle_types" value="MT" {% if 'MT' in selected %}checked{% endif %}>
+      <input class="form-check-input" type="radio" id="vehicleMT" name="vehicle_type" value="MT" {% if selected == 'MT' %}checked{% endif %} required>
       <label class="form-check-label" for="vehicleMT">Manual (MT)</label>
     </div>
   </div>

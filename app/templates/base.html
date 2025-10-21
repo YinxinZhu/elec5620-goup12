@@ -32,12 +32,14 @@
             {% if current_user.is_authenticated %}
               {% if is_student %}
               <li class="nav-item"><a class="nav-link" href="{{ url_for('student.dashboard') }}">{{ _('Dashboard') }}</a></li>
+              <li class="nav-item"><a class="nav-link" href="{{ url_for('student.exams') }}">{{ _('Exam centre') }}</a></li>
               <li class="nav-item"><a class="nav-link" href="{{ url_for('student.profile') }}">{{ _('Profile') }}</a></li>
               {% else %}
               <li class="nav-item"><a class="nav-link" href="{{ url_for('coach.dashboard') }}">{{ _('Dashboard') }}</a></li>
               <li class="nav-item"><a class="nav-link" href="{{ url_for('coach.slots') }}">{{ _('Availability') }}</a></li>
               <li class="nav-item"><a class="nav-link" href="{{ url_for('coach.appointments') }}">{{ _('Appointments') }}</a></li>
               <li class="nav-item"><a class="nav-link" href="{{ url_for('coach.students') }}">{{ _('Students') }}</a></li>
+              <li class="nav-item"><a class="nav-link" href="{{ url_for('coach.exams') }}">{{ _('Exams') }}</a></li>
               {% if current_user.is_admin %}
               <li class="nav-item"><a class="nav-link" href="{{ url_for('coach.personnel') }}">{{ _('Personnel') }}</a></li>
               {% endif %}
