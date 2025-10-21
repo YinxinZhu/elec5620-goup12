@@ -17,6 +17,7 @@ from urllib.parse import urljoin, urlparse
 
 from .. import db
 from ..models import Admin, Appointment, AvailabilitySlot, Coach, MockExamSummary, Student
+from ..services import StateSwitchError, switch_student_state
 
 coach_bp = Blueprint("coach", __name__, url_prefix="/coach")
 
@@ -210,14 +211,23 @@ def register_student():
     db.session.add(student)
 
     try:
-        db.session.commit()
-    except IntegrityError:
+        db.session.flush()
+        summary = switch_student_state(student, state_choice, acting_student=student)
+    except (IntegrityError, StateSwitchError) as exc:
         db.session.rollback()
-        flash("Unable to register with the provided details. Please try again.", "danger")
+        if isinstance(exc, StateSwitchError):
+            flash(str(exc), "danger")
+        else:
+            flash(
+                "Unable to register with the provided details. Please try again.",
+                "danger",
+            )
         return redirect(url_for("coach.login"))
 
     login_user(student)
     flash("Student account created successfully!", "success")
+    if summary:
+        flash(summary, "info")
     return redirect(url_for("student.dashboard"))
 
 

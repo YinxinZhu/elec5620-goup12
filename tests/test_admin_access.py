@@ -9,7 +9,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app import create_app, db
 from app.config import TestConfig
-from app.models import Admin, Appointment, AvailabilitySlot, Coach, Student
+from app.models import Admin, Appointment, AvailabilitySlot, Coach, ExamRule, Student
 
 
 @pytest.fixture
@@ -17,6 +17,15 @@ def admin_app():
     app = create_app(TestConfig)
     with app.app_context():
         db.create_all()
+
+        if not ExamRule.query.filter_by(state="NSW").first():
+            db.session.add(
+                ExamRule(state="NSW", total_questions=45, pass_mark=38, time_limit_minutes=45)
+            )
+        if not ExamRule.query.filter_by(state="VIC").first():
+            db.session.add(
+                ExamRule(state="VIC", total_questions=42, pass_mark=36, time_limit_minutes=40)
+            )
 
         coach = Coach.query.filter_by(email="coach@example.com").first()
         if not coach:

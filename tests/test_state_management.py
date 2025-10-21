@@ -129,6 +129,43 @@ def sample_data(app_context):
     return student
 
 
+def _login_student(client, mobile: str, password: str) -> None:
+    client.post(
+        "/coach/login",
+        data={"mobile_number": mobile, "password": password},
+        follow_redirects=True,
+    )
+
+
+def test_student_profile_switch_flow(app_context, sample_data):
+    client = app_context.test_client()
+    _login_student(client, "0400000001", "password123")
+
+    response = client.post(
+        "/student/profile",
+        data={
+            "name": "Jamie",
+            "email": "jamie@example.com",
+            "state": "VIC",
+            "preferred_language": "CHINESE",
+            "new_password": "",
+            "confirm_password": "",
+        },
+        follow_redirects=True,
+    )
+
+    page = response.get_data(as_text=True)
+    assert "Current state: VIC" in page
+    assert "Profile updated successfully" in page
+
+    with app_context.app_context():
+        student = Student.query.filter_by(email="jamie@example.com").one()
+        assert student.state == "VIC"
+        assert StudentStateProgress.query.filter_by(
+            student_id=student.id, state="VIC"
+        ).first()
+
+
 @pytest.fixture
 def progress_dataset(sample_data):
     student = sample_data

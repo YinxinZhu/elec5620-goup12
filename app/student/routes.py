@@ -7,6 +7,7 @@ from flask_login import current_user, login_required
 
 from .. import db
 from ..models import Appointment, AvailabilitySlot, Student
+from ..services import StateSwitchError, switch_student_state
 
 student_bp = Blueprint("student", __name__, url_prefix="/student")
 
@@ -83,9 +84,7 @@ def profile():
         student.email = email
 
         state_choice = (request.form.get("state") or "").strip().upper()
-        if state_choice in STATE_CHOICES:
-            student.state = state_choice
-        else:
+        if state_choice not in STATE_CHOICES:
             flash("Please choose a valid state or territory.", "danger")
             return render_template(
                 "student/profile.html",
@@ -116,7 +115,25 @@ def profile():
                 )
             student.set_password(new_password)
 
-        db.session.commit()
+        switch_summary: str | None = None
+        try:
+            if state_choice != student.state:
+                switch_summary = switch_student_state(
+                    student, state_choice, acting_student=student
+                )
+            else:
+                db.session.commit()
+        except StateSwitchError as exc:
+            db.session.rollback()
+            flash(str(exc), "danger")
+            return render_template(
+                "student/profile.html",
+                state_choices=STATE_CHOICES,
+                language_choices=LANGUAGE_CHOICES,
+            )
+
+        if switch_summary:
+            flash(switch_summary, "info")
         flash("Profile updated successfully!", "success")
         return redirect(url_for("student.profile"))
 
