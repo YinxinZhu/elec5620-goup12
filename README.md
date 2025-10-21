@@ -21,7 +21,9 @@ the student app covers:
   removal controls.
 
 Administrators inherit every coach ability and add platform-wide personnel
-management for creating accounts and resetting passwords across roles.
+management for creating accounts and resetting passwords across roles. Coaches
+and students authenticate against the same Flask app, with the mobile clients
+consuming the JSON endpoints described below.
 
 ## Prerequisites
 
@@ -78,18 +80,60 @@ management for creating accounts and resetting passwords across roles.
 
 ## Demo credentials
 
-`seed-demo` provisions the following accounts for quick manual testing:
+`seed-demo` provisions the following accounts for quick manual testing. All web
+logins use **mobile number + password**, while the student mobile app/API also
+authenticates with the same pair:
 
-| Role          | Email               | Password     |
-| ------------- | ------------------- | ------------ |
-| Administrator | `admin@example.com` | `password123`|
-| Coach         | `coach@example.com` | `password123`|
-| Students      | `jamie@example.com` | `password123`|
-|               | `priya@example.com` | `password123`|
-|               | `morgan@example.com`| `password123`|
+| Role          | Mobile       | Email               | Password     |
+| ------------- | ------------ | ------------------- | ------------ |
+| Administrator | `0400999000` | `admin@example.com` | `password123`|
+| Coach         | `0400111222` | `coach@example.com` | `password123`|
+| Students      | `0400000100` | `jamie@example.com` | `password123`|
+|               | `0400000101` | `priya@example.com` | `password123`|
+|               | `0400000102` | `morgan@example.com`| `password123`|
 
 Administrators access all coach pages plus `/coach/personnel` for cross-role
 account provisioning and password resets.
+
+## Feature walkthrough
+
+### Coach & administrator console
+
+1. **Log in** via `/coach/login` using the registered mobile number and
+   password for a coach or administrator.
+2. **Dashboard** highlights student engagement, upcoming appointments, and mock
+   exam progress metrics.
+3. **Availability slots** can be created, edited, or deleted from
+   `/coach/slots`. Admins may manage slots for any coach.
+4. **Appointments** at `/coach/appointments` list bookings and allow coaches to
+   confirm, cancel, or note attendance.
+5. **Students** at `/coach/students` provide a roster with filters by state and
+   profile completion.
+6. **Profile** management at `/coach/profile` controls language, state, and
+   notification preferences via validated dropdowns.
+7. **Personnel management** at `/coach/personnel` (admins only) creates new
+   coaches, students, or administrators and resets passwords.
+
+### Student experience (API-first)
+
+1. **Question bank practice (AH-01)** – Mobile clients call `GET /api/questions`
+   filtered by `state` and `topic`. `POST /api/questions/<id>/attempt` stores
+   `Attempt` records with the user's selection, correctness, timing, and brief
+   explanation. Wrong answers automatically appear in the notebook via
+   `WrongNotebookEntry` rows.
+2. **Mock exams (AH-02)** – Students request `POST /api/mock-exams/start` with
+   the target paper. Navigation is client-side using the session payload returned
+   by `GET /api/mock-exams/sessions/<id>`. Submissions call
+   `POST /api/mock-exams/sessions/<id>/submit`; a timeout trigger on the server
+   guarantees grading and notebook population.
+3. **Variant question generation (AH-03)** – From any attempted question, the
+   client sends `POST /api/questions/<id>/variants`. The service persists a
+   `VariQuesGroup` with a shared knowledge point label and individual `VariQues`
+   records. Review via `GET /api/questions/variants` supports pagination and
+   deletion with `DELETE /api/questions/variants/<id>`.
+4. **Notebook (AH-04)** – `GET /api/notebook` returns wrong and starred entries
+   including latest attempt metadata, enabling a combined review screen. Entries
+   are removed through `DELETE /api/notebook/<id>`.
 
 ## Student API quick reference
 
@@ -110,6 +154,12 @@ Refer to `tests/test_student_api.py` for end-to-end usage examples.
 
 ```bash
 pytest
+```
+
+To collect coverage details:
+
+```bash
+pytest --cov=app --cov-report=term-missing
 ```
 
 ## Database maintenance

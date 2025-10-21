@@ -40,6 +40,13 @@ def _parse_vehicle_types(values: Iterable[str]) -> str:
     return ",".join(sorted(cleaned))
 
 
+def _normalize_mobile(raw_value: str) -> str:
+    digits = "".join(ch for ch in raw_value if ch.isdigit())
+    if digits:
+        return digits
+    return raw_value.strip()
+
+
 def _require_admin_access():
     if not current_user.is_admin:
         flash("Only administrators may access personnel management.", "danger")
@@ -482,7 +489,7 @@ def _handle_account_creation() -> None:
     name = (request.form.get("name") or "").strip()
     email = (request.form.get("email") or "").strip().lower()
     password = request.form.get("password") or ""
-    mobile_number = (request.form.get("mobile_number") or "").strip()
+    mobile_number = _normalize_mobile(request.form.get("mobile_number") or "")
     state = (request.form.get("state") or "").strip().upper()
     if state not in STATE_CHOICES:
         flash("Please choose a valid state or territory.", "warning")
