@@ -16,6 +16,7 @@ from ..models import (
     Question,
     Student,
     StudentExamSession,
+    StudentStateProgress,
 )
 from ..services import StateSwitchError, switch_student_state
 from ..services.mock_exam_sessions import (
@@ -27,6 +28,11 @@ from ..services.mock_exam_sessions import (
     session_questions,
     start_session,
     submit_session,
+)
+from ..services.progress import (
+    ProgressAccessError,
+    ProgressValidationError,
+    get_progress_summary,
 )
 
 student_bp = Blueprint("student", __name__, url_prefix="/student")
@@ -98,6 +104,84 @@ def dashboard():
         "student/dashboard.html",
         upcoming_appointments=upcoming_appointments,
         latest_summary=latest_summary,
+    )
+
+
+@student_bp.route("/progress")
+@login_required
+def progress():
+    student = _current_student()
+    if not student:
+        return _redirect_non_students()
+
+    def _normalise(code: str | None) -> str:
+        return (code or "").strip().upper()
+
+    requested_state = _normalise(request.args.get("state"))
+
+    progress_records = (
+        StudentStateProgress.query.filter_by(student_id=student.id)
+        .order_by(StudentStateProgress.last_active_at.desc())
+        .all()
+    )
+
+    available_states: list[str] = []
+    seen: set[str] = set()
+    for record in progress_records:
+        code = _normalise(record.state)
+        if code and code not in seen:
+            available_states.append(code)
+            seen.add(code)
+
+    current_state = _normalise(student.state)
+    if current_state and current_state not in seen:
+        available_states.insert(0, current_state)
+        seen.add(current_state)
+
+    selected_state = requested_state if requested_state in seen else None
+    if not selected_state and available_states:
+        selected_state = available_states[0]
+
+    summary = None
+    error_message: str | None = None
+    completion_pct = pending_pct = accuracy_pct = incorrect_pct = 0
+    if selected_state:
+        try:
+            summary = get_progress_summary(
+                student, state=selected_state, acting_student=student
+            )
+            total = summary.total
+            done = summary.done
+
+            def _percent(part: int, whole: int) -> int:
+                if whole <= 0:
+                    return 0
+                return int(round((part / whole) * 100))
+
+            completion_pct = _percent(done, total)
+            pending_pct = 100 - completion_pct if total else 0
+            accuracy_pct = _percent(summary.correct, done)
+            incorrect_pct = 100 - accuracy_pct if done else 0
+        except (ProgressValidationError, ProgressAccessError) as exc:
+            error_message = str(exc)
+
+    export_url = (
+        url_for("api.progress_export", state=selected_state)
+        if summary and selected_state
+        else None
+    )
+
+    return render_template(
+        "student/progress.html",
+        available_states=available_states,
+        selected_state=selected_state,
+        summary=summary,
+        error_message=error_message,
+        completion_pct=completion_pct,
+        pending_pct=pending_pct,
+        accuracy_pct=accuracy_pct,
+        incorrect_pct=incorrect_pct,
+        export_url=export_url,
     )
 
 
