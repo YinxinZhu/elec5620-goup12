@@ -93,6 +93,45 @@ learner self-registration form directly beneath the login action.
   profile instantly and the session preference is cleared on logout so each
   account starts with its own default language.
 
+### Exam management & learner practice
+
+- Coaches (and administrators) have a new **Exams** workspace that surfaces
+  published papers and provides a guided form for building new timed exams.
+  Choose between manual question selection or automatic sampling by topic.
+- Upload a complete question bank in bulk via the Excel importer. Matching QIDs
+  are updated in-place so corrections can be re-uploaded without duplicate
+  records.
+- Students gain an **Exam centre** hub with two entry points: resume or start
+  coach-issued papers, and launch a self-practice set that pulls random
+  questions from the shared bank.
+- During an exam the learner receives a compact navigator, countdown timer, and
+  structured review view after submission. Timed sessions are persisted so
+  refreshes do not lose progress.
+
+#### Question bank Excel template
+
+The importer accepts `.xlsx` workbooks with the following header names (English
+or the paired Chinese equivalent). Columns marked as required must contain a
+value for every row.
+
+| Header (EN / 中文)     | Field               | Required | Notes |
+| --------------------- | ------------------- | -------- | ----- |
+| `QID` / `题目编号`     | External question ID| No       | When supplied, updates the matching record instead of creating a new one. |
+| `Prompt` / `题干`      | Question stem       | **Yes**  | Supports rich text copied from Word/Excel. |
+| `Option A` / `选项A`   | Answer option A     | **Yes**  | Text shown beside the `A` radio button. |
+| `Option B` / `选项B`   | Answer option B     | **Yes**  | |
+| `Option C` / `选项C`   | Answer option C     | **Yes**  | |
+| `Option D` / `选项D`   | Answer option D     | **Yes**  | |
+| `Correct Option` / `答案` | Correct letter (A–D) | **Yes** | Only the letter is required; the portal displays the matching option text. |
+| `Topic` / `考点类型`   | Knowledge point     | No       | Defaults to `general` when omitted. |
+| `Explanation` / `解析` | Rationale shown after grading | No | Ideal for remediation and practice mode. |
+| `State Scope` / `适用州` | State/territory code | No | Uses the upload form's default (or `ALL`) if blank. |
+| `Language` / `语言`    | Content language    | No       | Defaults to `ENGLISH`. |
+| `Image URL` / `配图`   | Optional illustration | No    | Rendered alongside the prompt when present. |
+
+> Tip: download the example template (see `/coach/exams`) and replace the
+> placeholder rows to guarantee column order.
+
 ## Demo credentials
 
 `seed-demo` provisions the following accounts for quick manual testing (all
