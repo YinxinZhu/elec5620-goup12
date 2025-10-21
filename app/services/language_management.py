@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from .. import db
 from ..i18n import ensure_language_code, language_label, normalise_language_code, translate_text
 from ..models import Student
 
@@ -38,7 +37,6 @@ def switch_student_language(
         raise LanguageSwitchPermissionError("Students may only update their own language preference.")
 
     student.preferred_language = ensure_language_code(desired)
-    db.session.commit()
 
     label = language_label(desired)
     return translate_text("Language switched to {label}.", ensure_language_code(desired), label=label)
