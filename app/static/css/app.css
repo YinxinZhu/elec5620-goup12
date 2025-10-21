@@ -110,6 +110,18 @@ body {
   font-weight: 600;
 }
 
+.auth-actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-top: 1.5rem;
+}
+
+.auth-actions .auth-register-link {
+  margin-left: 0;
+  white-space: nowrap;
+}
+
 .auth-register-link {
   font-weight: 600;
   color: #2c5282;

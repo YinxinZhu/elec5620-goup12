@@ -8,18 +8,6 @@
   <div class="auth-avatar" aria-hidden="true">👤</div>
   <h1 class="auth-title">{{ _('Sign in to the portal') }}</h1>
   <p class="auth-subtitle">{{ _('Use your registered mobile number and password to access the administrator, coach, or learner experience.') }}</p>
-  <form method="post" action="{{ url_for('switch_language') }}" class="mb-4 auth-language-form">
-    <input type="hidden" name="next" value="{{ request.full_path }}">
-    <label class="form-label small text-muted" for="auth_language_select">{{ _('Interface language') }}</label>
-    <div class="input-group input-group-sm">
-      <span class="input-group-text" aria-hidden="true">🌐</span>
-      <select class="form-select" id="auth_language_select" name="language" onchange="this.form.submit()">
-        {% for option in language_choices %}
-        <option value="{{ option.code }}"{% if option.code == active_language %} selected{% endif %}>{{ option.label }}</option>
-        {% endfor %}
-      </select>
-    </div>
-  </form>
   <form method="post" novalidate>
     <div class="mb-3">
       <label class="form-label visually-hidden" for="mobile_number">{{ _('Mobile number') }}</label>
@@ -50,10 +38,10 @@
         >
       </div>
     </div>
-    <div class="d-flex align-items-center">
+    <div class="auth-actions">
       <button type="submit" class="btn btn-primary flex-grow-1 auth-login-button">{{ _('Sign in') }}</button>
       <a
-        class="btn btn-link auth-register-link ms-3"
+        class="btn btn-link auth-register-link"
         href="{{ url_for('coach.register_student') }}"
       >{{ _('Register learner account') }}</a>
     </div>
