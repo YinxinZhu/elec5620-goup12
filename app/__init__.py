@@ -133,8 +133,12 @@ def create_app(config_class: type[Config] | None = None) -> Flask:
             if preference_attr is not None:
                 acting_student = user if getattr(user, "is_student", False) else None
                 try:
-                    message = switch_student_language(user, requested, acting_student=acting_student)
+                    message = switch_student_language(
+                        user, requested, acting_student=acting_student
+                    )
+                    db.session.commit()
                 except LanguageSwitchError as exc:
+                    db.session.rollback()
                     flash(str(exc), "danger")
                     return redirect(redirect_target)
 
