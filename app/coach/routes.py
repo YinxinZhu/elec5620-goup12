@@ -195,8 +195,11 @@ def login():
     )
 
 
-@coach_bp.route("/register", methods=["POST"])
+@coach_bp.route("/register", methods=["GET", "POST"])
 def register_student():
+    if request.method == "GET":
+        return render_template("coach/register_student.html", state_choices=STATE_CHOICES)
+
     name = (request.form.get("student_name") or "").strip()
     mobile_input = (request.form.get("student_mobile_number") or "").strip()
     mobile_number = _normalize_mobile_number(mobile_input)
@@ -210,19 +213,19 @@ def register_student():
 
     if not name or not mobile_number or not password:
         flash("Name, mobile number, and password are required to register.", "danger")
-        return redirect(url_for("coach.login"))
+        return render_template("coach/register_student.html", state_choices=STATE_CHOICES)
 
     if password != confirm_password:
         flash("Passwords do not match.", "danger")
-        return redirect(url_for("coach.login"))
+        return render_template("coach/register_student.html", state_choices=STATE_CHOICES)
 
     if state_choice not in STATE_CHOICES:
         flash("Please select a valid state or territory.", "danger")
-        return redirect(url_for("coach.login"))
+        return render_template("coach/register_student.html", state_choices=STATE_CHOICES)
 
     if preferred_language not in LANGUAGE_CHOICES:
         flash("Please choose a supported language.", "danger")
-        return redirect(url_for("coach.login"))
+        return render_template("coach/register_student.html", state_choices=STATE_CHOICES)
 
     normalized_coach_column = _normalized_mobile_expression(Coach.mobile_number)
     if (
@@ -231,7 +234,7 @@ def register_student():
         .first()
     ):
         flash("This mobile number is already registered to a coach or administrator.", "danger")
-        return redirect(url_for("coach.login"))
+        return render_template("coach/register_student.html", state_choices=STATE_CHOICES)
 
     normalized_student_column = _normalized_mobile_expression(Student.mobile_number)
     if (
@@ -240,11 +243,11 @@ def register_student():
         .first()
     ):
         flash("This mobile number is already registered to a student.", "danger")
-        return redirect(url_for("coach.login"))
+        return render_template("coach/register_student.html", state_choices=STATE_CHOICES)
 
     if email and Student.query.filter(Student.email == email).first():
         flash("This email is already registered to a student.", "danger")
-        return redirect(url_for("coach.login"))
+        return render_template("coach/register_student.html", state_choices=STATE_CHOICES)
 
     student = Student(
         name=name,
@@ -282,6 +285,13 @@ def register_student():
                 "Unable to register with the provided details. Please try again.",
                 "danger",
             )
+        return render_template("coach/register_student.html", state_choices=STATE_CHOICES)
+    except Exception:
+        db.session.rollback()
+        flash(
+            "Unexpected error while registering. Please try again in a moment.",
+            "danger",
+        )
         return redirect(url_for("coach.login"))
     except Exception:
         db.session.rollback()

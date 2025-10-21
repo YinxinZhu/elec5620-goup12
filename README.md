@@ -83,15 +83,17 @@ learner self-registration form directly beneath the login action.
 
 - Sign in with the mobile number associated with the account (staff and learners
   share the same form).
-- The "Register learner account" link at the bottom-right of the sign-in card
-  opens a modal where new students can self-register; the app logs them into the
-  learner dashboard immediately after a successful submission.
-- All session flash messages and form labels are presented in English so the web
-  experience is consistent across roles.
-- Choose the preferred interface language from the login card or profile
-  settings. The selection is saved to the active student's profile instantly and
-  the session preference is cleared on logout so each account starts with its
-  own default language.
+- The "Register learner account" link routes to a dedicated registration page
+  so the flow works without relying on modal JavaScript. After submitting valid
+  details the learner is logged in and redirected to their dashboard
+  automatically.
+- All interface copy (including the exam centre, practice flows, and review
+  pagination) has matching Simplified Chinese translations. Switch languages on
+  the login form or in the profile settings and the state-specific exam content
+  updates immediately.
+- Language toggles no longer appear in the main navigation; switching happens on
+  the login card or within profile settings, and the preference is reset on
+  logout so every account returns to its default language.
 
 ### Exam management & learner practice
 
