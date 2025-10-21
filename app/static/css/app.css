@@ -194,3 +194,63 @@ body {
   background-color: #f8fafc;
   border-radius: 0 0 1rem 1rem;
 }
+
+.exam-centre .exam-paper-card {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.exam-centre .exam-paper-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 1.5rem 2.5rem -1.5rem rgba(15, 23, 42, 0.45);
+}
+
+.practice-form .form-text {
+  font-size: 0.85rem;
+}
+
+.exam-session-layout .timer-display {
+  background: #0d6efd10;
+  border-radius: 999px;
+  padding: 0.5rem 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-weight: 600;
+}
+
+.exam-session-layout .timer-display .label {
+  text-transform: uppercase;
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  color: #0d6efd;
+}
+
+.exam-session-layout .question-form .list-group-item {
+  border-radius: 0.75rem;
+  margin-bottom: 0.75rem;
+  border: 1px solid #e2e8f0;
+}
+
+.exam-session-layout .question-form .list-group-item:hover {
+  border-color: #0d6efd;
+}
+
+.options-list li.correct {
+  background-color: #edf7ed;
+  border-radius: 0.5rem;
+  padding: 0.35rem 0.5rem;
+}
+
+.practice-session .accordion-button {
+  font-weight: 600;
+}
+
+.practice-session .accordion-button:not(.collapsed) {
+  color: #0d6efd;
+  background-color: rgba(13, 110, 253, 0.08);
+}
+
+.practice-session .accordion-body {
+  background-color: #f8fafc;
+  border-radius: 0 0 1rem 1rem;
+}

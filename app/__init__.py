@@ -5,6 +5,7 @@ from flask_login import LoginManager, current_user
 from pathlib import Path
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import ArgumentError
+from urllib.parse import urlparse
 
 db = SQLAlchemy()
 migrate = Migrate()
@@ -114,10 +115,22 @@ def create_app(config_class: type[Config] | None = None) -> Flask:
             "language_label": language_label,
         }
 
+    def is_safe_redirect(target: str | None) -> bool:
+        if not target:
+            return False
+        parsed = urlparse(target)
+        return not parsed.netloc and not parsed.scheme
+
+    def resolve_redirect_target(default: str) -> str:
+        for candidate in (request.form.get("next"), request.referrer):
+            if candidate and is_safe_redirect(candidate):
+                return candidate
+        return default
+
     @app.post("/language")
     def switch_language():
         requested = normalise_language_code(request.form.get("language"))
-        redirect_target = request.form.get("next") or request.referrer or url_for("coach.login")
+        redirect_target = resolve_redirect_target(url_for("coach.login"))
 
         if not requested:
             flash(_translate("Please choose a supported language."), "danger")

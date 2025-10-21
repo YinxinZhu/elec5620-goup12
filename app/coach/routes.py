@@ -293,6 +293,13 @@ def register_student():
             "danger",
         )
         return redirect(url_for("coach.login"))
+    except Exception:
+        db.session.rollback()
+        flash(
+            "Unexpected error while registering. Please try again in a moment.",
+            "danger",
+        )
+        return redirect(url_for("coach.login"))
 
     login_user(student)
     flash("Student account created successfully!", "success")

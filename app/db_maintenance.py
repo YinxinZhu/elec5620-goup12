@@ -308,6 +308,110 @@ def ensure_core_tables(engine: Engine, logger: logging.Logger | None = None) -> 
         raise
 
 
+def ensure_question_language_support(
+    engine: Engine, logger: logging.Logger | None = None
+) -> None:
+    """Backfill legacy question tables with language support."""
+
+    inspector = inspect(engine)
+    tables = set(inspector.get_table_names())
+    if "questions" not in tables:
+        return
+
+    columns = {column["name"] for column in inspector.get_columns("questions")}
+    uniques = inspector.get_unique_constraints("questions")
+    indexes = inspector.get_indexes("questions")
+
+    logger = logger or logging.getLogger(__name__)
+
+    dialect = engine.dialect.name
+
+    try:
+        with engine.begin() as connection:
+            needs_backfill = "language" not in columns
+            if needs_backfill:
+                logger.warning(
+                    "Missing questions.language column detected; applying legacy schema patch."
+                )
+                connection.execute(
+                    text(
+                        "ALTER TABLE questions "
+                        "ADD COLUMN language VARCHAR(20) NOT NULL DEFAULT 'ENGLISH'"
+                    )
+                )
+            else:
+                logger.info(
+                    "Ensuring questions.language values are populated for legacy records."
+                )
+            connection.execute(
+                text(
+                    "UPDATE questions SET language = 'ENGLISH' "
+                    "WHERE language IS NULL OR language = ''"
+                )
+            )
+
+            has_language_unique = any(
+                sorted(unique.get("column_names", []))
+                == ["language", "qid", "state_scope"]
+                for unique in uniques
+            )
+
+            if has_language_unique:
+                return
+
+            legacy_unique_names = [
+                unique["name"]
+                for unique in uniques
+                if sorted(unique.get("column_names", [])) == ["qid", "state_scope"]
+                and unique.get("name")
+            ]
+
+            if legacy_unique_names:
+                for name in legacy_unique_names:
+                    if dialect == "sqlite":
+                        connection.execute(text(f'DROP INDEX IF EXISTS "{name}"'))
+                    else:
+                        connection.execute(
+                            text(
+                                "ALTER TABLE questions DROP CONSTRAINT IF EXISTS "
+                                f'"{name}"'
+                            )
+                        )
+            elif dialect == "sqlite":
+                legacy_indexes = [
+                    index["name"]
+                    for index in indexes
+                    if index.get("unique")
+                    and index.get("column_names") == ["qid", "state_scope"]
+                    and index.get("name")
+                ]
+                for name in legacy_indexes:
+                    connection.execute(text(f'DROP INDEX IF EXISTS "{name}"'))
+
+            if dialect == "sqlite":
+                connection.execute(
+                    text(
+                        "CREATE UNIQUE INDEX IF NOT EXISTS "
+                        "uq_question_qid_state_language "
+                        "ON questions (qid, state_scope, language)"
+                    )
+                )
+            else:
+                connection.execute(
+                    text(
+                        "ALTER TABLE questions ADD CONSTRAINT "
+                        "uq_question_qid_state_language "
+                        "UNIQUE (qid, state_scope, language)"
+                    )
+                )
+
+    except SQLAlchemyError:
+        logger.exception(
+            "Failed to backfill question language support during maintenance"
+        )
+        raise
+
+
 def ensure_database_schema(engine: Engine, logger: logging.Logger | None = None) -> None:
     """Run all lightweight schema checks for legacy compatibility."""
 
@@ -317,3 +421,4 @@ def ensure_database_schema(engine: Engine, logger: logging.Logger | None = None)
     ensure_admin_support(engine, logger)
     normalize_account_mobile_numbers(engine, logger)
     ensure_variant_support(engine, logger)
+    ensure_question_language_support(engine, logger)
