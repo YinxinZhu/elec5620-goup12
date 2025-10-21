@@ -88,10 +88,10 @@ learner self-registration form directly beneath the login action.
   learner dashboard immediately after a successful submission.
 - All session flash messages and form labels are presented in English so the web
   experience is consistent across roles.
-- Use the language switcher in the top navigation (or login header) to toggle
-  between English and Chinese. The selection is saved to the active student's
-  profile instantly and the session preference is cleared on logout so each
-  account starts with its own default language.
+- Choose the preferred interface language from the login card or profile
+  settings. The selection is saved to the active student's profile instantly and
+  the session preference is cleared on logout so each account starts with its
+  own default language.
 
 ### Exam management & learner practice
 
@@ -102,11 +102,16 @@ learner self-registration form directly beneath the login action.
   are updated in-place so corrections can be re-uploaded without duplicate
   records.
 - Students gain an **Exam centre** hub with two entry points: resume or start
-  coach-issued papers, and launch a self-practice set that pulls random
-  questions from the shared bank.
+  coach-issued papers aligned to their currently selected state, and launch a
+  self-practice set that pulls random questions from the state bank plus
+  nationally shared items.
 - During an exam the learner receives a compact navigator, countdown timer, and
-  structured review view after submission. Timed sessions are persisted so
+  a structured review view with pagination (five questions per page) that can be
+  filtered to show only incorrect answers. Timed sessions are persisted so
   refreshes do not lose progress.
+- Question banks and exam papers respect state boundaries: uploading questions
+  or building papers captures the state scope, and students only see the
+  variants targeted to their chosen jurisdiction.
 
 #### Question bank Excel template
 

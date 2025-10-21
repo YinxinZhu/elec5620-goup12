@@ -46,13 +46,32 @@
           <h2 class="h5 mb-0">{{ _('Question review') }}</h2>
         </div>
         <div class="card-body">
+          <div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3 mb-3">
+            <div class="btn-group" role="group" aria-label="{{ _('Review filter') }}">
+              <a
+                class="btn btn-outline-primary btn-sm{% if not incorrect_only %} active{% endif %}"
+                href="{{ url_for('student.exam_session', session_id=exam_session.id, page=1) }}"
+              >
+                {{ _('All questions') }}
+              </a>
+              <a
+                class="btn btn-outline-primary btn-sm{% if incorrect_only %} active{% endif %}"
+                href="{{ url_for('student.exam_session', session_id=exam_session.id, page=1, review='incorrect') }}"
+              >
+                {{ _('Incorrect only') }} ({{ incorrect_count }})
+              </a>
+            </div>
+            <div class="text-muted small ms-md-auto">
+              {{ _('Page') }} {{ review_page }} / {{ review_total_pages }}
+            </div>
+          </div>
           <div class="list-group list-group-flush">
-            {% for item in questions %}
+            {% for item in review_questions %}
             {% set q = item.question %}
             <div class="list-group-item">
               <div class="d-flex justify-content-between align-items-start">
                 <div>
-                  <h3 class="h6">{{ loop.index }}. {{ q.prompt }}</h3>
+                  <h3 class="h6">{{ item.position }}. {{ q.prompt }}</h3>
                   <p class="text-muted small mb-2">{{ _('Topic') }}: {{ q.topic }}</p>
                   <ul class="list-unstyled mb-2 options-list">
                     <li {% if q.correct_option == 'A' %}class="correct"{% endif %}><strong>A.</strong> {{ q.option_a }}</li>
@@ -78,8 +97,43 @@
                 {% endif %}
               </div>
             </div>
+            {% else %}
+            <div class="list-group-item text-center text-muted py-4">
+              {{ _('No questions match the current filter.') }}
+            </div>
             {% endfor %}
           </div>
+          {% if review_total_pages > 1 %}
+          {% set review_param = 'incorrect' if incorrect_only else None %}
+          <nav class="mt-3" aria-label="{{ _('Review pagination') }}">
+            <ul class="pagination pagination-sm mb-0 justify-content-end">
+              {% set prev_page = review_page - 1 %}
+              <li class="page-item{% if review_page == 1 %} disabled{% endif %}">
+                <a
+                  class="page-link"
+                  href="{{ url_for('student.exam_session', session_id=exam_session.id, page=prev_page, review=review_param) }}"
+                  aria-label="{{ _('Previous page') }}"
+                >&laquo;</a>
+              </li>
+              {% for page_number in range(1, review_total_pages + 1) %}
+              <li class="page-item{% if page_number == review_page %} active{% endif %}">
+                <a
+                  class="page-link"
+                  href="{{ url_for('student.exam_session', session_id=exam_session.id, page=page_number, review=review_param) }}"
+                >{{ page_number }}</a>
+              </li>
+              {% endfor %}
+              {% set next_page = review_page + 1 %}
+              <li class="page-item{% if review_page == review_total_pages %} disabled{% endif %}">
+                <a
+                  class="page-link"
+                  href="{{ url_for('student.exam_session', session_id=exam_session.id, page=next_page, review=review_param) }}"
+                  aria-label="{{ _('Next page') }}"
+                >&raquo;</a>
+              </li>
+            </ul>
+          </nav>
+          {% endif %}
         </div>
       </div>
     </div>

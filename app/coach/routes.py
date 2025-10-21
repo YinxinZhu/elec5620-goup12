@@ -25,6 +25,7 @@ from ..models import (
     Appointment,
     AvailabilitySlot,
     Coach,
+    ExamRule,
     MockExamPaper,
     MockExamPaperQuestion,
     MockExamSummary,
@@ -255,9 +256,23 @@ def register_student():
     student.set_password(password)
     db.session.add(student)
 
+    summary: str | None = None
+    rule_warning: str | None = None
+    rule_exists = ExamRule.query.filter_by(state=state_choice).first() is not None
     try:
         db.session.flush()
-        summary = switch_student_state(student, state_choice, acting_student=student)
+        if rule_exists:
+            summary = switch_student_state(
+                student, state_choice, acting_student=student
+            )
+        else:
+            db.session.commit()
+            rule_warning = (
+                "Exam rules for "
+                f"{state_choice} are not configured yet."
+                " Students can practise immediately, but administrators "
+                "must add the rule before scheduling timed exams."
+            )
     except (IntegrityError, StateSwitchError) as exc:
         db.session.rollback()
         if isinstance(exc, StateSwitchError):
@@ -268,11 +283,20 @@ def register_student():
                 "danger",
             )
         return redirect(url_for("coach.login"))
+    except Exception:
+        db.session.rollback()
+        flash(
+            "Unexpected error while registering. Please try again in a moment.",
+            "danger",
+        )
+        return redirect(url_for("coach.login"))
 
     login_user(student)
     flash("Student account created successfully!", "success")
     if summary:
         flash(summary, "info")
+    if rule_warning:
+        flash(rule_warning, "warning")
     return redirect(url_for("student.dashboard"))
 
 

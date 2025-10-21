@@ -59,14 +59,20 @@ def _ensure_exam_rule(state: str) -> ExamRule:
 def session_questions(session: StudentExamSession) -> list[SessionQuestion]:
     ordered = sorted(session.paper.questions, key=lambda pq: pq.position)
     answer_lookup = {answer.question_id: answer for answer in session.answers}
-    return [
-        SessionQuestion(
-            question=paper_question.question,
-            position=paper_question.position,
-            answer=answer_lookup.get(paper_question.question_id),
+    allowed_states = {session.state, "ALL"}
+    filtered: list[SessionQuestion] = []
+    for paper_question in ordered:
+        question = paper_question.question
+        if question.state_scope not in allowed_states:
+            continue
+        filtered.append(
+            SessionQuestion(
+                question=question,
+                position=paper_question.position,
+                answer=answer_lookup.get(paper_question.question_id),
+            )
         )
-        for paper_question in ordered
-    ]
+    return filtered
 
 
 def ensure_session_active(session: StudentExamSession) -> StudentExamSession:
@@ -96,12 +102,17 @@ def start_session(student: Student, paper: MockExamPaper) -> SessionStartResult:
             return SessionStartResult(session=session, resumed=True)
 
     now = datetime.utcnow()
+    allowed_states = {student.state, "ALL"}
+    total_questions = sum(
+        1 for pq in paper.questions if pq.question.state_scope in allowed_states
+    )
+
     session = StudentExamSession(
         student_id=student.id,
         state=student.state,
         paper_id=paper.id,
         expires_at=now + timedelta(minutes=paper.time_limit_minutes),
-        total_questions=len(paper.questions),
+        total_questions=total_questions,
     )
     db.session.add(session)
     db.session.commit()
@@ -153,7 +164,7 @@ def finalise_session(session: StudentExamSession, *, auto: bool = False) -> None
     session.status = "submitted" if not auto else "abandoned"
     session.finished_at = now
     session.score = score
-    session.total_questions = session.total_questions or len(questions)
+    session.total_questions = len(questions)
 
     summary = MockExamSummary(student_id=session.student_id, state=session.state, score=score)
     db.session.add(summary)

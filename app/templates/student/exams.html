@@ -6,7 +6,12 @@
     <div class="d-flex align-items-center justify-content-between mb-3">
       <div>
         <h1 class="h3 mb-1">{{ _('Exam Centre') }}</h1>
-        <p class="text-muted mb-0">{{ _('Choose a published paper or continue an in-progress exam.') }}</p>
+        <p class="text-muted mb-0">
+          {{ _('Choose a published paper or continue an in-progress exam.') }}
+        </p>
+        <p class="text-muted small mb-0">
+          {{ _('Showing exam papers for state {state_code}. Questions marked "ALL" are shared nationally.').format(state_code=state) }}
+        </p>
       </div>
       {% if active_session %}
       <div class="badge bg-success-subtle text-success px-3 py-2">
@@ -58,7 +63,7 @@
         <h2 class="h5 mb-0">{{ _('Self practice') }}</h2>
       </div>
       <div class="card-body">
-        <p class="text-muted">{{ _('Generate a personalised practice set using questions from the shared bank.') }}</p>
+        <p class="text-muted">{{ _('Generate a personalised practice set using questions from your state bank plus any nationally shared items.') }}</p>
         <form method="post" action="{{ url_for('student.practice') }}" class="practice-form">
           <div class="mb-3">
             <label class="form-label" for="question_count">{{ _('Number of questions') }}</label>

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from math import ceil
 import random
 
 from flask import Blueprint, flash, redirect, render_template, request, session, url_for
@@ -211,6 +212,7 @@ def exams():
         practice_default=PRACTICE_DEFAULT_COUNT,
         practice_max=PRACTICE_MAX_COUNT,
         topics=topics,
+        state=student.state,
     )
 
 
@@ -224,6 +226,11 @@ def start_exam(paper_id: int):
     paper = MockExamPaper.query.filter_by(id=paper_id, state=student.state).first()
     if not paper:
         flash("Selected exam paper is not available for your state.", "warning")
+        return redirect(url_for("student.exams"))
+
+    allowed_states = {student.state, "ALL"}
+    if not any(pq.question.state_scope in allowed_states for pq in paper.questions):
+        flash("This paper has no questions aligned with your state syllabus.", "warning")
         return redirect(url_for("student.exams"))
 
     try:
@@ -294,12 +301,49 @@ def exam_session(session_id: int):
         return redirect(url_for("student.exam_session", session_id=session_id, q=target_index))
 
     submission = None
+    incorrect_only = False
+    review_page = 1
+    review_total_pages = 1
+    review_questions = []
+    incorrect_count = 0
     if session_obj.status in {"submitted", "abandoned"}:
         try:
             submission = submit_session(session_obj)
         except ExamRuleMissingError as exc:
             flash(str(exc), "danger")
             submission = None
+
+    if submission:
+        incorrect_items = [
+            item
+            for item in questions
+            if not (item.answer and item.answer.is_correct)
+        ]
+        incorrect_count = len(incorrect_items)
+
+        review_filter = (request.args.get("review") or "all").strip().lower()
+        incorrect_only = review_filter == "incorrect"
+        filtered_questions = incorrect_items if incorrect_only else questions
+
+        total_filtered = len(filtered_questions)
+        if total_filtered:
+            try:
+                review_page = int(request.args.get("page", "1"))
+            except ValueError:
+                review_page = 1
+            review_page = max(1, review_page)
+            review_total_pages = max(1, ceil(total_filtered / 5))
+            if review_page > review_total_pages:
+                review_page = review_total_pages
+            start_index = (review_page - 1) * 5
+            end_index = start_index + 5
+            review_questions = filtered_questions[start_index:end_index]
+        else:
+            review_page = 1
+            review_total_pages = 1
+            review_questions = []
+    else:
+        review_questions = questions
 
     answered_ids = {
         payload.question.id for payload in questions if payload.answer and payload.answer.selected_option
@@ -317,6 +361,11 @@ def exam_session(session_id: int):
         submission=submission,
         answered_ids=answered_ids,
         remaining_seconds=remaining_seconds,
+        review_questions=review_questions,
+        review_page=review_page,
+        review_total_pages=review_total_pages,
+        incorrect_count=incorrect_count,
+        incorrect_only=incorrect_only,
     )
 
 
