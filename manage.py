@@ -35,7 +35,7 @@ def seed_demo() -> None:
     coach = Coach(
         email="coach@example.com",
         name="Alex Johnson",
-        phone="0400 111 222",
+        mobile_number="0400 111 222",
         city="Sydney",
         state="NSW",
         vehicle_types="AT,MT",
@@ -46,7 +46,7 @@ def seed_demo() -> None:
     admin_coach = Coach(
         email="admin@example.com",
         name="Platform Administrator",
-        phone="0400 999 000",
+        mobile_number="0400 999 000",
         city="Sydney",
         state="NSW",
         vehicle_types="AT,MT",

@@ -20,6 +20,10 @@ class AccountUserMixin(UserMixin):
     def is_admin(self) -> bool:
         return False
 
+    @property
+    def is_student(self) -> bool:
+        return False
+
 
 class Coach(AccountUserMixin, db.Model):
     __tablename__ = "coaches"
@@ -28,7 +32,7 @@ class Coach(AccountUserMixin, db.Model):
     email = db.Column(db.String(120), unique=True, nullable=False)
     password_hash = db.Column(db.String(255), nullable=False)
     name = db.Column(db.String(120), nullable=False)
-    phone = db.Column(db.String(50), nullable=False)
+    mobile_number = db.Column("phone", db.String(20), unique=True, nullable=False)
     city = db.Column(db.String(100), nullable=False)
     state = db.Column(db.String(10), nullable=False)
     vehicle_types = db.Column(db.String(20), nullable=False)  # comma separated AT/MT
@@ -74,8 +78,12 @@ class Admin(db.Model):
     def check_password(self, password: str) -> bool:
         return self.coach.check_password(password)
 
+    @property
+    def mobile_number(self) -> str:
+        return self.coach.mobile_number
 
-class Student(db.Model):
+
+class Student(UserMixin, db.Model):
     __tablename__ = "students"
 
     id = db.Column(db.Integer, primary_key=True)
@@ -129,6 +137,9 @@ class Student(db.Model):
         "VariantQuestion", back_populates="student", cascade="all, delete-orphan"
     )
 
+    def get_id(self) -> str:  # pragma: no cover - exercised via login manager
+        return f"student:{self.id}"
+
     def set_password(self, password: str) -> None:
         self.password_hash = generate_password_hash(password)
 
@@ -144,6 +155,14 @@ class Student(db.Model):
         )
         db.session.add(token)
         return token
+
+    @property
+    def is_student(self) -> bool:
+        return True
+
+    @property
+    def is_admin(self) -> bool:
+        return False
 
 
 class MockExamSummary(db.Model):

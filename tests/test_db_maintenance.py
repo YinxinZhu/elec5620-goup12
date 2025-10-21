@@ -14,6 +14,7 @@ from app import create_app, db
 from app.config import TestConfig
 from app.db_maintenance import (
     DEFAULT_ADMIN_EMAIL,
+    DEFAULT_ADMIN_MOBILE_NUMBER,
     ensure_admin_support,
     ensure_database_schema,
     ensure_student_mobile_column,
@@ -105,11 +106,13 @@ def test_ensure_admin_support_creates_table_and_account(coach_engine):
     admin_id = rows[0].id
     with coach_engine.begin() as conn:
         coach_row = conn.execute(
-            text("SELECT email, password_hash FROM coaches WHERE id = :id"),
+            text("SELECT email, phone, password_hash FROM coaches WHERE id = :id"),
             {"id": admin_id},
         ).one()
 
+    normalized_mobile = "".join(ch for ch in DEFAULT_ADMIN_MOBILE_NUMBER if ch.isdigit())
     assert coach_row.email == DEFAULT_ADMIN_EMAIL
+    assert coach_row.phone == normalized_mobile
     assert coach_row.password_hash and coach_row.password_hash != "password123"
 
 
@@ -121,9 +124,12 @@ def test_ensure_admin_support_is_idempotent(coach_engine):
 
     with coach_engine.begin() as conn:
         admin_count = conn.execute(text("SELECT COUNT(*) FROM admins")).scalar_one()
+        normalized_mobile = "".join(ch for ch in DEFAULT_ADMIN_MOBILE_NUMBER if ch.isdigit())
         coach_count = conn.execute(
-            text("SELECT COUNT(*) FROM coaches WHERE email = :email"),
-            {"email": DEFAULT_ADMIN_EMAIL},
+            text(
+                "SELECT COUNT(*) FROM coaches WHERE email = :email AND phone = :mobile"
+            ),
+            {"email": DEFAULT_ADMIN_EMAIL, "mobile": normalized_mobile},
         ).scalar_one()
 
     assert admin_count == 1
