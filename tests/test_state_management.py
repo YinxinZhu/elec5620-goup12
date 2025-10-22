@@ -12,6 +12,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from app import create_app, db
 from app.config import TestConfig
 from app.models import (
+    Appointment,
+    AvailabilitySlot,
     Coach,
     ExamRule,
     MockExamPaper,
@@ -159,6 +161,8 @@ def sample_data(app_context):
         ),
     ]
 
+    student.coach = coach_nsw
+
     db.session.add_all(
         [
             student,
@@ -232,6 +236,91 @@ def test_language_switch_route_updates_preference(app_context, sample_data):
 
     profile_page = client.get("/student/profile").get_data(as_text=True)
     assert "首选语言" in profile_page
+
+
+def test_student_can_book_assigned_coach_slot(app_context, sample_data):
+    client = app_context.test_client()
+
+    with app_context.app_context():
+        student_record = db.session.get(Student, sample_data.id)
+        assert student_record is not None
+        assert student_record.assigned_coach_id is not None
+        coach = db.session.get(Coach, student_record.assigned_coach_id)
+        assert coach is not None
+        slot = AvailabilitySlot(
+            coach_id=coach.id,
+            start_time=datetime.utcnow() + timedelta(hours=2),
+            duration_minutes=60,
+            location_text="City Test Centre",
+        )
+        db.session.add(slot)
+        db.session.commit()
+        slot_id = slot.id
+        student_id = sample_data.id
+        coach_id = coach.id
+
+    _login_student(client, "0400000001", "password123")
+
+    with app_context.app_context():
+        available_count = (
+            AvailabilitySlot.query.filter_by(coach_id=coach_id, status="available")
+            .filter(AvailabilitySlot.start_time >= datetime.utcnow())
+            .count()
+        )
+    assert available_count == 1
+    confirmation = client.post(
+        f"/student/slots/{slot_id}/book",
+        follow_redirects=True,
+    )
+    assert confirmation.status_code == 200
+    confirmation_text = confirmation.get_data(as_text=True)
+    assert "already been reserved" not in confirmation_text
+    assert "Assign a coach" not in confirmation_text
+
+    with app_context.app_context():
+        refreshed_slot = db.session.get(AvailabilitySlot, slot_id)
+        db.session.refresh(refreshed_slot)
+        assert refreshed_slot is not None
+        assert refreshed_slot.status == "booked"
+        assert refreshed_slot.appointment is not None
+        assert refreshed_slot.appointment.student_id == student_id
+        appointment = Appointment.query.filter_by(slot_id=slot_id).first()
+        assert appointment is not None
+        assert appointment.student_id == student_id
+
+    dashboard_after = client.get("/student/dashboard").get_data(as_text=True)
+    assert dashboard_after.count("City Test Centre") >= 1
+    assert "Book this session" not in dashboard_after
+
+    duplicate_attempt = client.post(
+        f"/student/slots/{slot_id}/book",
+        follow_redirects=True,
+    ).get_data(as_text=True)
+    assert "already been reserved" in duplicate_attempt
+
+    with app_context.app_context():
+        other_coach = Coach.query.filter_by(state="VIC").first()
+        assert other_coach is not None
+        other_slot = AvailabilitySlot(
+            coach_id=other_coach.id,
+            start_time=datetime.utcnow() + timedelta(days=1),
+            duration_minutes=30,
+            location_text="Melbourne Lot",
+        )
+        db.session.add(other_slot)
+        db.session.commit()
+        other_slot_id = other_slot.id
+
+    wrong_coach = client.post(
+        f"/student/slots/{other_slot_id}/book",
+        follow_redirects=True,
+    ).get_data(as_text=True)
+    assert "different coach" in wrong_coach
+
+    with app_context.app_context():
+        preserved_slot = db.session.get(AvailabilitySlot, other_slot_id)
+        assert preserved_slot is not None
+        assert preserved_slot.status == "available"
 
 
 @pytest.fixture

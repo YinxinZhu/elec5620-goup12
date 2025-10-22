@@ -114,8 +114,12 @@ learner self-registration form directly beneath the login action.
   navigation for quick access to logged mistakes per state.
 - During an exam the learner receives a compact navigator, countdown timer, and
   a structured review view with pagination (five questions per page) that can be
-  filtered to show only incorrect answers. Timed sessions are persisted so
-  refreshes do not lose progress.
+  filtered to show only incorrect answers. Saved responses instantly turn their
+  navigator buttons green so it is obvious which items are complete. Timed
+  sessions are persisted so refreshes do not lose progress.
+- The learner dashboard surfaces the assigned coach's upcoming availability and
+  lets students book open slots directly. Confirmations immediately convert the
+  slot to a booked state on both the student and coach dashboards.
 - Question banks and exam papers respect state boundaries: uploading questions
   or building papers captures the state scope, and students only see the
   variants targeted to their chosen jurisdiction.
