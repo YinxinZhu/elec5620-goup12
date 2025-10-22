@@ -199,7 +199,8 @@
           <div class="row g-2">
             {% for item in questions %}
             <div class="col-3">
-              <a class="btn btn-sm w-100 {% if loop.index0 == current_index %}btn-primary{% elif item.question.id in answered_ids %}btn-outline-success{% else %}btn-outline-secondary{% endif %}" href="{{ url_for('student.exam_session', session_id=exam_session.id, q=loop.index) }}">
+              {% set navigator_class = 'btn-primary' if loop.index0 == current_index else 'btn-success' if item.question.id in answered_ids else 'btn-outline-secondary' %}
+              <a class="btn btn-sm w-100 {{ navigator_class }}" href="{{ url_for('student.exam_session', session_id=exam_session.id, q=loop.index) }}">
                 {{ loop.index }}
               </a>
             </div>
