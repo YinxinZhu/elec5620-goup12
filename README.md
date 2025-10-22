@@ -107,6 +107,11 @@ learner self-registration form directly beneath the login action.
   coach-issued papers aligned to their currently selected state, and launch a
   self-practice set that pulls random questions from the state bank plus
   nationally shared items.
+- The **Study progress** area now supports state, topic, and date filters with
+  performance cards, daily attempt trends, learning goal tracking, and
+  state-scoped CSV exports that honour the chosen filters.
+- Wrong answer review has a dedicated **Notebook** page linked from the student
+  navigation for quick access to logged mistakes per state.
 - During an exam the learner receives a compact navigator, countdown timer, and
   a structured review view with pagination (five questions per page) that can be
   filtered to show only incorrect answers. Timed sessions are persisted so

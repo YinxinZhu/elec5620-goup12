@@ -33,6 +33,7 @@ from app.services import (
     export_state_progress_csv,
     get_coaches_for_state,
     get_progress_summary,
+    get_progress_trend,
     get_questions_for_state,
     switch_student_state,
 )
@@ -505,6 +506,48 @@ def test_progress_summary_aggregates_metrics(progress_dataset):
     assert vic_summary.last_score == 65
 
 
+def test_progress_summary_topic_filter(progress_dataset):
+    student = progress_dataset
+
+    summary = get_progress_summary(
+        student, state="NSW", acting_student=student, topic="state"
+    )
+
+    assert summary.total == 2
+    assert summary.done == 1
+    assert summary.correct == 1
+    assert summary.pending == 1
+    assert summary.wrong == 2
+
+
+def test_progress_summary_date_filter(progress_dataset):
+    student = progress_dataset
+    recent_start = datetime.utcnow() - timedelta(hours=2)
+
+    summary = get_progress_summary(
+        student, acting_student=student, start_at=recent_start
+    )
+
+    assert summary.done == 1
+    assert summary.correct == 1
+    assert summary.pending == summary.total - summary.done
+    assert summary.wrong == 0
+
+
+def test_progress_trend_respects_filters(progress_dataset):
+    student = progress_dataset
+
+    full_trend = get_progress_trend(student, acting_student=student, state="NSW")
+    assert full_trend
+    assert any(point.correct >= 1 for point in full_trend)
+
+    topic_trend = get_progress_trend(
+        student, state="NSW", acting_student=student, topic="state"
+    )
+    assert sum(point.attempted for point in topic_trend) == 2
+    assert all(point.correct <= point.attempted for point in topic_trend)
+
+
 def test_progress_summary_rejects_invalid_state(progress_dataset):
     student = progress_dataset
     with pytest.raises(ProgressValidationError):
@@ -545,6 +588,17 @@ def test_progress_csv_export_marks_pending(progress_dataset):
     vic_csv = export_state_progress_csv(student, state="VIC", acting_student=student)
     vic_rows = list(csv.DictReader(vic_csv.splitlines()))
     assert any(row["correctness"] == "incorrect" for row in vic_rows)
+
+    recent_start = datetime.utcnow() - timedelta(hours=2)
+    recent_csv = export_state_progress_csv(
+        student, acting_student=student, start_at=recent_start
+    )
+    recent_rows = list(csv.DictReader(recent_csv.splitlines()))
+    assert sum(1 for row in recent_rows if row["correctness"] == "correct") == 1
+    assert any(
+        row["qid"] == "q1" and row["correctness"] == "pending"
+        for row in recent_rows
+    )
 
     other_student = Student(
         name="Chris",
