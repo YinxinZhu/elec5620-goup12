@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}{{ _('Wrong answer notebook') }} · {{ super() }}{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3 mb-4">
+  <div>
+    <h1 class="h3 mb-1">{{ _('Wrong answer notebook') }}</h1>
+    <p class="text-muted mb-0">{{ _('Revisit the questions you missed and plan targeted revisions.') }}</p>
+  </div>
+</div>
+
+{% if available_states %}
+<form method="get" class="row gy-2 gx-3 align-items-end mb-4">
+  <div class="col-sm-4 col-lg-3">
+    <label for="state" class="form-label">{{ _('State / Territory') }}</label>
+    <select id="state" name="state" class="form-select" onchange="this.form.submit()">
+      {% for state_code in available_states %}
+      <option value="{{ state_code }}" {% if state_code == selected_state %}selected{% endif %}>{{ state_code }}</option>
+      {% endfor %}
+    </select>
+  </div>
+</form>
+{% endif %}
+
+{% if not selected_state %}
+<div class="alert alert-info" role="alert">{{ _('Select a state to review your notebook.') }}</div>
+{% else %}
+  <div class="card mb-4">
+    <div class="card-body">
+      <h2 class="h5 mb-3">{{ _('Overview') }}</h2>
+      {% if entries %}
+      <p class="text-muted mb-0">{{ _('You have logged %(count)s wrong attempts in this state.', count=total_wrong) }}</p>
+      {% else %}
+      <p class="text-muted mb-0">{{ _('No wrong answers recorded for this state yet.') }}</p>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if entries %}
+  <div class="card">
+    <div class="card-body">
+      <h2 class="h5 mb-3">{{ _('Wrong answer list') }}</h2>
+      <div class="table-responsive">
+        <table class="table table-striped align-middle">
+          <thead>
+            <tr>
+              <th scope="col">{{ _('Question ID') }}</th>
+              <th scope="col">{{ _('Topic') }}</th>
+              <th scope="col">{{ _('Attempts') }}</th>
+              <th scope="col">{{ _('Last wrong at') }}</th>
+              <th scope="col">{{ _('Prompt excerpt') }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for entry in entries %}
+            <tr>
+              <td>{{ entry.question.qid }}</td>
+              <td>{{ entry.question.topic }}</td>
+              <td>{{ entry.wrong_count }}</td>
+              <td>{{ entry.last_wrong_at.strftime('%Y-%m-%d %H:%M') if entry.last_wrong_at else _('Never') }}</td>
+              <td class="text-truncate" style="max-width: 380px;">{{ entry.question.prompt|striptags|truncate(160) }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+{% endif %}
+{% endblock %}
