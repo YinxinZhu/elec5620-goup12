@@ -87,10 +87,11 @@ learner self-registration form directly beneath the login action.
   so the flow works without relying on modal JavaScript. After submitting valid
   details the learner is logged in and redirected to their dashboard
   automatically.
-- All interface copy (including the exam centre, practice flows, and review
-  pagination) has matching Simplified Chinese translations. Switch languages on
-  the login form or in the profile settings and the state-specific exam content
-  updates immediately.
+- All interface copy (including the exam centre, practice flows, review
+  pagination, and the coach/administrator workspaces) has matching Simplified
+  Chinese translations. Switch languages on the login form or in profile
+  settings and the state-specific content updates immediately across dashboards,
+  availability management, and personnel tables.
 - Language toggles no longer appear in the main navigation; switching happens on
   the login card or within profile settings, and the preference is reset on
   logout so every account returns to its default language.
