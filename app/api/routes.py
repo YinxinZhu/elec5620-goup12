@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, time, timedelta
 from functools import wraps
 from typing import Any
 
@@ -826,8 +826,22 @@ def progress_summary():
 def progress_export():
     student: Student = g.current_student
     state = request.args.get("state")
+    topic = request.args.get("topic")
+    start_date = _parse_date(request.args.get("start"))
+    end_date = _parse_date(request.args.get("end"))
+    start_at = datetime.combine(start_date, time.min) if start_date else None
+    end_at = datetime.combine(end_date, time.max) if end_date else None
+    if start_at and end_at and start_at > end_at:
+        return _json_error("Invalid date range.", 400)
     try:
-        csv_payload = export_state_progress_csv(student, state=state, acting_student=student)
+        csv_payload = export_state_progress_csv(
+            student,
+            state=state,
+            acting_student=student,
+            start_at=start_at,
+            end_at=end_at,
+            topic=topic,
+        )
     except (ProgressValidationError, ProgressAccessError) as exc:
         return _json_error(str(exc))
 

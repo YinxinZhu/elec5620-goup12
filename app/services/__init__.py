@@ -3,9 +3,11 @@
 from .progress import (
     ProgressAccessError,
     ProgressSummary,
+    ProgressTrendPoint,
     ProgressValidationError,
     export_state_progress_csv,
     get_progress_summary,
+    get_progress_trend,
 )
 from .language_management import (
     LanguageSwitchError,
@@ -25,9 +27,11 @@ from .state_management import (
 __all__ = [
     "ProgressAccessError",
     "ProgressSummary",
+    "ProgressTrendPoint",
     "ProgressValidationError",
     "export_state_progress_csv",
     "get_progress_summary",
+    "get_progress_trend",
     "LanguageSwitchError",
     "LanguageSwitchPermissionError",
     "LanguageSwitchValidationError",
