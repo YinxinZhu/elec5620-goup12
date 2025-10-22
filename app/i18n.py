@@ -136,7 +136,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "Progress": "学习进度",
         "Exams": "考试",
         "Personnel": "人员管理",
-        "Coach Login": "教练登录",
+        "Login": "登录",
         "Coach Dashboard": "教练仪表盘",
         "My profile": "我的资料",
         "My students": "我的学员",
