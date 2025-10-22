@@ -107,10 +107,22 @@ learner self-registration form directly beneath the login action.
   coach-issued papers aligned to their currently selected state, and launch a
   self-practice set that pulls random questions from the state bank plus
   nationally shared items.
+- The **Study progress** area now supports state, topic, and date filters with
+  performance cards, daily attempt trends, learning goal tracking, and
+  state-scoped CSV exports that honour the chosen filters.
+- Wrong answer review has a dedicated **Notebook** page linked from the student
+  navigation for quick access to logged mistakes per state.
 - During an exam the learner receives a compact navigator, countdown timer, and
   a structured review view with pagination (five questions per page) that can be
-  filtered to show only incorrect answers. Timed sessions are persisted so
-  refreshes do not lose progress.
+  filtered to show only incorrect answers. Saved responses instantly turn their
+  navigator buttons green so it is obvious which items are complete. Timed
+  sessions are persisted so refreshes do not lose progress.
+- The learner dashboard surfaces the assigned coach's upcoming availability and
+  lets students book open slots directly. Confirmations immediately convert the
+  slot to a booked state on both the student and coach dashboards, while
+  cancellation windows follow the training policy: more than 24 hours' notice
+  cancels instantly, requests within 24 hours but outside two hours require
+  coach approval, and the final two-hour window locks the booking.
 - Question banks and exam papers respect state boundaries: uploading questions
   or building papers captures the state scope, and students only see the
   variants targeted to their chosen jurisdiction.
