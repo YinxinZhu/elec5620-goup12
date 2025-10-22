@@ -1,0 +1,277 @@
+{% extends "base.html" %}
+{% block title %}{{ _('Study progress') }} · {{ super() }}{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3 mb-4">
+  <div>
+    <h1 class="h3 mb-1">{{ _('Study progress') }}</h1>
+    <p class="text-muted mb-0">{{ _('Track your practice and mock-exam results for each state.') }}</p>
+  </div>
+  {% if export_url %}
+  <a class="btn btn-outline-secondary" href="{{ export_url }}">{{ _('Export CSV') }}</a>
+  {% else %}
+  <button type="button" class="btn btn-outline-secondary" disabled>{{ _('Export CSV') }}</button>
+  {% endif %}
+</div>
+
+{% if available_states %}
+<form method="get" class="row gy-2 gx-3 align-items-end mb-4">
+  <div class="col-md-3">
+    <label for="state" class="form-label">{{ _('State / Territory') }}</label>
+    <select id="state" name="state" class="form-select">
+      {% for state_code in available_states %}
+      <option value="{{ state_code }}" {% if state_code == selected_state %}selected{% endif %}>{{ state_code }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="col-md-3">
+    <label for="topic" class="form-label">{{ _('Module / Topic') }}</label>
+    <select id="topic" name="topic" class="form-select">
+      <option value="">{{ _('All topics') }}</option>
+      {% for topic in available_topics %}
+      <option value="{{ topic }}" {% if topic == topic_filter %}selected{% endif %}>{{ topic }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="col-md-2">
+    <label for="start" class="form-label">{{ _('Start date') }}</label>
+    <input id="start" name="start" type="date" class="form-control" value="{{ start_date.isoformat() if start_date }}">
+  </div>
+  <div class="col-md-2">
+    <label for="end" class="form-label">{{ _('End date') }}</label>
+    <input id="end" name="end" type="date" class="form-control" value="{{ end_date.isoformat() if end_date }}">
+  </div>
+  <div class="col-md-2 d-flex gap-2">
+    <button type="submit" class="btn btn-primary mt-auto">{{ _('Apply filters') }}</button>
+    <a class="btn btn-outline-secondary mt-auto" href="{{ url_for('student.progress') }}">{{ _('Reset') }}</a>
+  </div>
+</form>
+{% endif %}
+
+{% if filter_error %}
+<div class="alert alert-warning" role="alert">{{ filter_error }}</div>
+{% endif %}
+
+{% if error_message %}
+<div class="alert alert-danger" role="alert">{{ _(error_message) }}</div>
+{% elif summary %}
+  <div class="row row-cols-1 row-cols-sm-2 row-cols-lg-3 g-3 mb-4">
+    {% set cards = [
+      (_('Total questions'), summary.total),
+      (_('Completed'), summary.done),
+      (_('Correct'), summary.correct),
+      (_('Wrong answers logged'), summary.wrong),
+      (_('Pending'), summary.pending),
+      (_('Latest mock-exam score'), summary.last_score if summary.last_score is not none else '—'),
+      (_('Completion rate'), '%.1f%%'|format(completion_pct)),
+      (_('Accuracy rate'), '%.1f%%'|format(accuracy_pct)),
+    ] %}
+    {% for label, value in cards %}
+    <div class="col">
+      <div class="card h-100">
+        <div class="card-body text-center">
+          <p class="text-uppercase small text-muted mb-1">{{ label }}</p>
+          <p class="display-6 fw-semibold mb-0">{{ value }}</p>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  {% if summary.total == 0 %}
+  <div class="alert alert-info" role="alert">{{ _('Start a practice to see progress.') }}</div>
+  {% else %}
+  <div class="row g-3 mb-4">
+    <div class="col-lg-6">
+      <div class="card h-100">
+        <div class="card-body">
+          <h2 class="h5 mb-3">{{ _('Overview') }}</h2>
+          <p class="text-muted small mb-2">{{ _('Completion across all questions that match the current filters.') }}</p>
+          <div class="mb-4">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <span class="fw-semibold">{{ _('Completion') }}</span>
+              <span class="text-muted">{{ summary.done }} / {{ summary.total }} · {{ '%.1f%%'|format(completion_pct) }}</span>
+            </div>
+            <div class="progress" style="height: 12px;">
+              <div class="progress-bar bg-success" role="progressbar" style="width: {{ completion_pct }}%;" aria-valuenow="{{ completion_pct }}" aria-valuemin="0" aria-valuemax="100"></div>
+              <div class="progress-bar bg-light text-dark" role="progressbar" style="width: {{ pending_pct }}%;" aria-valuenow="{{ pending_pct }}" aria-valuemin="0" aria-valuemax="100"></div>
+            </div>
+          </div>
+          <div>
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <span class="fw-semibold">{{ _('Accuracy') }}</span>
+              {% if summary.done %}
+              <span class="text-muted">{{ summary.correct }} / {{ summary.done }} · {{ '%.1f%%'|format(accuracy_pct) }}</span>
+              {% else %}
+              <span class="text-muted">{{ _('No answered questions yet.') }}</span>
+              {% endif %}
+            </div>
+            <div class="progress" style="height: 12px;">
+              <div class="progress-bar bg-info" role="progressbar" style="width: {{ accuracy_pct }}%;" aria-valuenow="{{ accuracy_pct }}" aria-valuemin="0" aria-valuemax="100"></div>
+              <div class="progress-bar bg-warning" role="progressbar" style="width: {{ incorrect_pct }}%;" aria-valuenow="{{ incorrect_pct }}" aria-valuemin="0" aria-valuemax="100"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-lg-6">
+      <div class="card h-100">
+        <div class="card-body">
+          <h2 class="h5 mb-3">{{ _('Study goals') }}</h2>
+          <p class="text-muted small">{{ _('Set personal completion and accuracy targets to stay on track.') }}</p>
+          <dl class="row small mb-3">
+            <dt class="col-6 mb-1">{{ _('Completion goal') }}</dt>
+            <dd class="col-6 mb-1 text-end">
+              {{ '%.1f%%'|format(goal_status.completion) }}
+              {% if goal_status.completion_met %}
+              <span class="badge bg-success ms-2">{{ _('On track') }}</span>
+              {% else %}
+              <span class="badge bg-warning text-dark ms-2">{{ _('Needs focus') }}</span>
+              {% endif %}
+            </dd>
+            <dt class="col-6 mb-1">{{ _('Accuracy goal') }}</dt>
+            <dd class="col-6 mb-1 text-end">
+              {{ '%.1f%%'|format(goal_status.accuracy) }}
+              {% if goal_status.accuracy_met %}
+              <span class="badge bg-success ms-2">{{ _('On track') }}</span>
+              {% else %}
+              <span class="badge bg-warning text-dark ms-2">{{ _('Needs focus') }}</span>
+              {% endif %}
+            </dd>
+          </dl>
+          {% if not goal_status.completion_met %}
+          <p class="small text-muted mb-2">{{ _('Complete another %(count).1f%% of the filtered questions to reach your goal.', count=goal_status.completion_gap) }}</p>
+          {% endif %}
+          {% if not goal_status.accuracy_met %}
+          <p class="small text-muted mb-3">{{ _('Improve accuracy by %(count).1f%% to hit your target.', count=goal_status.accuracy_gap) }}</p>
+          {% endif %}
+          <form method="post" class="row gy-2 gx-3 align-items-end">
+            <input type="hidden" name="state" value="{{ goal_form_defaults.state }}">
+            <input type="hidden" name="topic" value="{{ goal_form_defaults.topic }}">
+            <input type="hidden" name="start" value="{{ goal_form_defaults.start }}">
+            <input type="hidden" name="end" value="{{ goal_form_defaults.end }}">
+            <div class="col-sm-6">
+              <label for="goal_completion" class="form-label">{{ _('Completion goal (%)') }}</label>
+              <input type="number" min="0" max="100" step="0.5" class="form-control" id="goal_completion" name="goal_completion" value="{{ '%.1f'|format(goal_form_defaults.completion) }}">
+            </div>
+            <div class="col-sm-6">
+              <label for="goal_accuracy" class="form-label">{{ _('Accuracy goal (%)') }}</label>
+              <input type="number" min="0" max="100" step="0.5" class="form-control" id="goal_accuracy" name="goal_accuracy" value="{{ '%.1f'|format(goal_form_defaults.accuracy) }}">
+            </div>
+            <div class="col-12">
+              <button type="submit" class="btn btn-primary">{{ _('Save goals') }}</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row g-3 mb-4">
+    <div class="col-xl-7">
+      <div class="card h-100">
+        <div class="card-body">
+          <div class="d-flex justify-content-between align-items-center mb-3">
+            <h2 class="h5 mb-0">{{ _('Daily trend') }}</h2>
+            <small class="text-muted">{{ trend_range.start }} — {{ trend_range.end }}</small>
+          </div>
+          {% if trend_summary %}
+          <p class="text-muted small mb-3">{{ _('Average %(questions).1f questions attempted per day with %(accuracy).1f%% accuracy.', questions=trend_summary.average_attempted, accuracy=trend_summary.average_accuracy) }}</p>
+          {% endif %}
+          {% if trend_points %}
+          <div class="table-responsive">
+            <table class="table table-sm align-middle mb-0">
+              <thead>
+                <tr>
+                  <th scope="col">{{ _('Date') }}</th>
+                  <th scope="col" class="text-end">{{ _('Attempted') }}</th>
+                  <th scope="col" class="text-end">{{ _('Correct') }}</th>
+                  <th scope="col" class="text-end">{{ _('Accuracy') }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for point in trend_points %}
+                <tr>
+                  <td>{{ point.day }}</td>
+                  <td class="text-end">{{ point.attempted }}</td>
+                  <td class="text-end">{{ point.correct }}</td>
+                  <td class="text-end">{{ '%.1f%%'|format(point.accuracy) }}</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          {% else %}
+          <p class="text-muted mb-0">{{ _('No attempts recorded in this period.') }}</p>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+    <div class="col-xl-5">
+      <div class="card h-100">
+        <div class="card-body">
+          <h2 class="h5 mb-3">{{ _('Recent mock exams') }}</h2>
+          {% if recent_exam_stats %}
+          <p class="text-muted small mb-3">{{ _('Average score %(avg).1f%% · Best %(best)s%%', avg=recent_exam_stats.average_score, best=recent_exam_stats.best_score) }}</p>
+          {% endif %}
+          {% if recent_exams %}
+          <ul class="list-group list-group-flush">
+            {% for exam in recent_exams %}
+            <li class="list-group-item d-flex justify-content-between align-items-center">
+              <span>
+                {{ exam.taken_at.date() if exam.taken_at }}
+                <span class="text-muted small d-block">{{ exam.state }}</span>
+              </span>
+              <span class="fw-semibold">{{ exam.score if exam.score is not none else '—' }}</span>
+            </li>
+            {% endfor %}
+          </ul>
+          {% else %}
+          <p class="text-muted mb-0">{{ _('No mock exams in this period.') }}</p>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card mb-4">
+    <div class="card-body">
+      <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-3 gap-2">
+        <h2 class="h5 mb-0">{{ _('Wrong answer recap') }}</h2>
+        {% if selected_state %}
+        <a class="btn btn-sm btn-outline-primary" href="{{ url_for('student.notebook', state=selected_state) }}">{{ _('Open notebook') }}</a>
+        {% endif %}
+      </div>
+      {% if wrong_preview %}
+      <div class="table-responsive">
+        <table class="table table-sm align-middle mb-0">
+          <thead>
+            <tr>
+              <th scope="col">{{ _('Question ID') }}</th>
+              <th scope="col">{{ _('Topic') }}</th>
+              <th scope="col" class="text-end">{{ _('Wrong attempts') }}</th>
+              <th scope="col">{{ _('Last reviewed') }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in wrong_preview %}
+            <tr>
+              <td>{{ row.qid }}</td>
+              <td>{{ row.topic or _('—') }}</td>
+              <td class="text-end">{{ row.wrong_count }}</td>
+              <td>{{ row.last_wrong_at.date() if row.last_wrong_at else _('Never') }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <p class="text-muted mb-0">{{ _('No wrong answers logged for the selected filters.') }}</p>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+{% else %}
+  <div class="alert alert-info" role="alert">{{ _('Switch to a state to load progress data.') }}</div>
+{% endif %}
+{% endblock %}
