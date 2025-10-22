@@ -12,6 +12,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from app import create_app, db
 from app.config import TestConfig
 from app.models import (
+    Appointment,
+    AvailabilitySlot,
     Coach,
     ExamRule,
     MockExamPaper,
@@ -33,6 +35,7 @@ from app.services import (
     export_state_progress_csv,
     get_coaches_for_state,
     get_progress_summary,
+    get_progress_trend,
     get_questions_for_state,
     switch_student_state,
 )
@@ -60,22 +63,24 @@ def sample_data(app_context):
     student.set_password("password123")
     coach_nsw = Coach(
         email="nsw@example.com",
-        password_hash="hash",
+        password_hash="",
         name="Alex",
         mobile_number="0400001000",
         city="Sydney",
         state="NSW",
         vehicle_types="AT",
     )
+    coach_nsw.set_password("coachpass")
     coach_vic = Coach(
         email="vic@example.com",
-        password_hash="hash",
+        password_hash="",
         name="Casey",
         mobile_number="0400001001",
         city="Melbourne",
         state="VIC",
         vehicle_types="MT",
     )
+    coach_vic.set_password("coachpass")
 
     questions = [
         Question(
@@ -158,6 +163,8 @@ def sample_data(app_context):
         ),
     ]
 
+    student.coach = coach_nsw
+
     db.session.add_all(
         [
             student,
@@ -176,6 +183,14 @@ def sample_data(app_context):
 
 
 def _login_student(client, mobile: str, password: str) -> None:
+    client.post(
+        "/coach/login",
+        data={"mobile_number": mobile, "password": password},
+        follow_redirects=True,
+    )
+
+
+def _login_coach(client, mobile: str, password: str) -> None:
     client.post(
         "/coach/login",
         data={"mobile_number": mobile, "password": password},
@@ -233,6 +248,240 @@ def test_language_switch_route_updates_preference(app_context, sample_data):
     assert "首选语言" in profile_page
 
 
+def test_student_can_book_assigned_coach_slot(app_context, sample_data):
+    client = app_context.test_client()
+
+    with app_context.app_context():
+        student_record = db.session.get(Student, sample_data.id)
+        assert student_record is not None
+        assert student_record.assigned_coach_id is not None
+        coach = db.session.get(Coach, student_record.assigned_coach_id)
+        assert coach is not None
+        slot = AvailabilitySlot(
+            coach_id=coach.id,
+            start_time=datetime.utcnow() + timedelta(hours=2),
+            duration_minutes=60,
+            location_text="City Test Centre",
+        )
+        db.session.add(slot)
+        db.session.commit()
+        slot_id = slot.id
+        student_id = sample_data.id
+        coach_id = coach.id
+
+    _login_student(client, "0400000001", "password123")
+
+    with app_context.app_context():
+        available_count = (
+            AvailabilitySlot.query.filter_by(coach_id=coach_id, status="available")
+            .filter(AvailabilitySlot.start_time >= datetime.utcnow())
+            .count()
+        )
+    assert available_count == 1
+    confirmation = client.post(
+        f"/student/slots/{slot_id}/book",
+        follow_redirects=True,
+    )
+    assert confirmation.status_code == 200
+    confirmation_text = confirmation.get_data(as_text=True)
+    assert "already been reserved" not in confirmation_text
+    assert "Assign a coach" not in confirmation_text
+
+    with app_context.app_context():
+        refreshed_slot = db.session.get(AvailabilitySlot, slot_id)
+        db.session.refresh(refreshed_slot)
+        assert refreshed_slot is not None
+        assert refreshed_slot.status == "booked"
+        assert refreshed_slot.appointment is not None
+        assert refreshed_slot.appointment.student_id == student_id
+        appointment = Appointment.query.filter_by(slot_id=slot_id).first()
+        assert appointment is not None
+        assert appointment.student_id == student_id
+
+    dashboard_after = client.get("/student/dashboard").get_data(as_text=True)
+    assert dashboard_after.count("City Test Centre") >= 1
+    assert "Book this session" not in dashboard_after
+
+    duplicate_attempt = client.post(
+        f"/student/slots/{slot_id}/book",
+        follow_redirects=True,
+    ).get_data(as_text=True)
+    assert "already been reserved" in duplicate_attempt
+
+    with app_context.app_context():
+        other_coach = Coach.query.filter_by(state="VIC").first()
+        assert other_coach is not None
+        other_slot = AvailabilitySlot(
+            coach_id=other_coach.id,
+            start_time=datetime.utcnow() + timedelta(days=1),
+            duration_minutes=30,
+            location_text="Melbourne Lot",
+        )
+        db.session.add(other_slot)
+        db.session.commit()
+        other_slot_id = other_slot.id
+
+    wrong_coach = client.post(
+        f"/student/slots/{other_slot_id}/book",
+        follow_redirects=True,
+    ).get_data(as_text=True)
+    assert "different coach" in wrong_coach
+
+    with app_context.app_context():
+        preserved_slot = db.session.get(AvailabilitySlot, other_slot_id)
+        assert preserved_slot is not None
+        assert preserved_slot.status == "available"
+
+
+def test_student_cancellation_windows(app_context, sample_data):
+    client = app_context.test_client()
+    _login_student(client, "0400000001", "password123")
+
+    with app_context.app_context():
+        student_record = db.session.get(Student, sample_data.id)
+        assert student_record is not None
+        coach = db.session.get(Coach, student_record.assigned_coach_id)
+        assert coach is not None
+        now = datetime.utcnow()
+        far_slot = AvailabilitySlot(
+            coach_id=coach.id,
+            start_time=now + timedelta(days=2),
+            duration_minutes=60,
+            location_text="Long notice",
+            status="booked",
+        )
+        mid_slot = AvailabilitySlot(
+            coach_id=coach.id,
+            start_time=now + timedelta(hours=6),
+            duration_minutes=60,
+            location_text="Needs approval",
+            status="booked",
+        )
+        near_slot = AvailabilitySlot(
+            coach_id=coach.id,
+            start_time=now + timedelta(hours=1, minutes=30),
+            duration_minutes=60,
+            location_text="Too late",
+            status="booked",
+        )
+        db.session.add_all([far_slot, mid_slot, near_slot])
+        db.session.flush()
+        far_appt = Appointment(slot=far_slot, student_id=student_record.id)
+        mid_appt = Appointment(slot=mid_slot, student_id=student_record.id)
+        near_appt = Appointment(slot=near_slot, student_id=student_record.id)
+        db.session.add_all([far_appt, mid_appt, near_appt])
+        db.session.commit()
+        far_id, mid_id, near_id = far_appt.id, mid_appt.id, near_appt.id
+
+    immediate = client.post(
+        f"/student/appointments/{far_id}/cancel",
+        follow_redirects=True,
+    )
+    assert immediate.status_code == 200
+    immediate_html = immediate.get_data(as_text=True)
+    assert "Session cancelled" in immediate_html
+
+    with app_context.app_context():
+        refreshed_far = db.session.get(Appointment, far_id)
+        assert refreshed_far is not None
+        assert refreshed_far.status == "cancelled"
+        assert refreshed_far.slot.status == "available"
+        assert refreshed_far.cancellation_requested_at is not None
+
+    pending = client.post(
+        f"/student/appointments/{mid_id}/cancel",
+        follow_redirects=True,
+    )
+    assert pending.status_code == 200
+    pending_html = pending.get_data(as_text=True)
+    assert "Cancellation request" in pending_html
+
+    with app_context.app_context():
+        refreshed_mid = db.session.get(Appointment, mid_id)
+        assert refreshed_mid is not None
+        assert refreshed_mid.status == "pending_cancel"
+        assert refreshed_mid.slot.status == "booked"
+        assert refreshed_mid.cancellation_requested_at is not None
+
+    too_late = client.post(
+        f"/student/appointments/{near_id}/cancel",
+        follow_redirects=True,
+    )
+    assert too_late.status_code == 200
+    too_late_html = too_late.get_data(as_text=True)
+    assert "cannot be cancelled" in too_late_html
+
+    with app_context.app_context():
+        refreshed_near = db.session.get(Appointment, near_id)
+        assert refreshed_near is not None
+        assert refreshed_near.status == "booked"
+        assert refreshed_near.cancellation_requested_at is None
+
+
+def test_coach_can_process_cancellation_requests(app_context, sample_data):
+    client = app_context.test_client()
+
+    with app_context.app_context():
+        student_record = db.session.get(Student, sample_data.id)
+        assert student_record is not None
+        coach = db.session.get(Coach, student_record.assigned_coach_id)
+        assert coach is not None
+        slot = AvailabilitySlot(
+            coach_id=coach.id,
+            start_time=datetime.utcnow() + timedelta(days=1),
+            duration_minutes=60,
+            location_text="Decision slot",
+            status="booked",
+        )
+        db.session.add(slot)
+        db.session.flush()
+        appointment = Appointment(slot=slot, student_id=student_record.id)
+        db.session.add(appointment)
+        db.session.commit()
+        appointment_id = appointment.id
+
+    _login_coach(client, "0400001000", "coachpass")
+
+    to_pending = client.post(
+        f"/coach/appointments/{appointment_id}/status",
+        data={"status": "pending_cancel"},
+        follow_redirects=True,
+    )
+    assert to_pending.status_code == 200
+
+    with app_context.app_context():
+        pending_appt = db.session.get(Appointment, appointment_id)
+        assert pending_appt is not None
+        assert pending_appt.status == "pending_cancel"
+        assert pending_appt.slot.status == "booked"
+        assert pending_appt.cancellation_requested_at is not None
+
+    deny = client.post(
+        f"/coach/appointments/{appointment_id}/status",
+        data={"status": "booked"},
+        follow_redirects=True,
+    )
+    assert deny.status_code == 200
+
+    with app_context.app_context():
+        denied_appt = db.session.get(Appointment, appointment_id)
+        assert denied_appt is not None
+        assert denied_appt.status == "booked"
+        assert denied_appt.slot.status == "booked"
+        assert denied_appt.cancellation_requested_at is None
+
+    approve = client.post(
+        f"/coach/appointments/{appointment_id}/status",
+        data={"status": "cancelled"},
+        follow_redirects=True,
+    )
+    assert approve.status_code == 200
+
+    with app_context.app_context():
+        cancelled_appt = db.session.get(Appointment, appointment_id)
+        assert cancelled_appt is not None
+        assert cancelled_appt.status == "cancelled"
+        assert cancelled_appt.slot.status == "available"
 @pytest.fixture
 def progress_dataset(sample_data):
     student = sample_data
@@ -505,6 +754,48 @@ def test_progress_summary_aggregates_metrics(progress_dataset):
     assert vic_summary.last_score == 65
 
 
+def test_progress_summary_topic_filter(progress_dataset):
+    student = progress_dataset
+
+    summary = get_progress_summary(
+        student, state="NSW", acting_student=student, topic="state"
+    )
+
+    assert summary.total == 2
+    assert summary.done == 1
+    assert summary.correct == 1
+    assert summary.pending == 1
+    assert summary.wrong == 2
+
+
+def test_progress_summary_date_filter(progress_dataset):
+    student = progress_dataset
+    recent_start = datetime.utcnow() - timedelta(hours=2)
+
+    summary = get_progress_summary(
+        student, acting_student=student, start_at=recent_start
+    )
+
+    assert summary.done == 1
+    assert summary.correct == 1
+    assert summary.pending == summary.total - summary.done
+    assert summary.wrong == 0
+
+
+def test_progress_trend_respects_filters(progress_dataset):
+    student = progress_dataset
+
+    full_trend = get_progress_trend(student, acting_student=student, state="NSW")
+    assert full_trend
+    assert any(point.correct >= 1 for point in full_trend)
+
+    topic_trend = get_progress_trend(
+        student, state="NSW", acting_student=student, topic="state"
+    )
+    assert sum(point.attempted for point in topic_trend) == 2
+    assert all(point.correct <= point.attempted for point in topic_trend)
+
+
 def test_progress_summary_rejects_invalid_state(progress_dataset):
     student = progress_dataset
     with pytest.raises(ProgressValidationError):
@@ -545,6 +836,17 @@ def test_progress_csv_export_marks_pending(progress_dataset):
     vic_csv = export_state_progress_csv(student, state="VIC", acting_student=student)
     vic_rows = list(csv.DictReader(vic_csv.splitlines()))
     assert any(row["correctness"] == "incorrect" for row in vic_rows)
+
+    recent_start = datetime.utcnow() - timedelta(hours=2)
+    recent_csv = export_state_progress_csv(
+        student, acting_student=student, start_at=recent_start
+    )
+    recent_rows = list(csv.DictReader(recent_csv.splitlines()))
+    assert sum(1 for row in recent_rows if row["correctness"] == "correct") == 1
+    assert any(
+        row["qid"] == "q1" and row["correctness"] == "pending"
+        for row in recent_rows
+    )
 
     other_student = Student(
         name="Chris",

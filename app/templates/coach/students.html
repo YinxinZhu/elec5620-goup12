@@ -1,20 +1,20 @@
 {% extends 'base.html' %}
-{% block title %}{{ 'All Students' if current_user.is_admin else 'My Students' }}{% endblock %}
+{% block title %}{{ _('All students') if current_user.is_admin else _('My students') }}{% endblock %}
 {% block content %}
-<h1 class="h3 mb-4">{{ 'All Students' if current_user.is_admin else 'My Students' }}</h1>
+<h1 class="h3 mb-4">{{ _('All students') if current_user.is_admin else _('My students') }}</h1>
 {% if students %}
 <div class="table-responsive">
   <table class="table align-middle">
     <thead>
       <tr>
-        <th>Name</th>
-        <th>Email</th>
-        <th>State</th>
+        <th scope="col">{{ _('Name') }}</th>
+        <th scope="col">{{ _('Email') }}</th>
+        <th scope="col">{{ _('State') }}</th>
         {% if current_user.is_admin %}
-        <th>Assigned Coach</th>
+        <th scope="col">{{ _('Assigned Coach') }}</th>
         {% endif %}
-        <th>Mock exam attempts</th>
-        <th>Last score</th>
+        <th scope="col">{{ _('Mock exam attempts') }}</th>
+        <th scope="col">{{ _('Last score') }}</th>
       </tr>
     </thead>
     <tbody>
@@ -28,7 +28,7 @@
           {% if student.assigned_coach_id and coach_lookup.get(student.assigned_coach_id) %}
             {{ coach_lookup[student.assigned_coach_id].name }}
           {% else %}
-            <span class="text-muted">Unassigned</span>
+            <span class="text-muted">{{ _('Unassigned') }}</span>
           {% endif %}
         </td>
         {% endif %}
@@ -37,7 +37,7 @@
           {% if summaries[student.id].last_score is not none %}
             {{ summaries[student.id].last_score }}%
           {% else %}
-            <span class="text-muted">No data</span>
+            <span class="text-muted">{{ _('No data') }}</span>
           {% endif %}
         </td>
       </tr>
@@ -46,6 +46,6 @@
   </table>
 </div>
 {% else %}
-<div class="alert alert-info">{{ 'No students found.' if current_user.is_admin else 'No students assigned yet.' }}</div>
+<div class="alert alert-info">{{ _('No students found.') if current_user.is_admin else _('No students assigned yet.') }}</div>
 {% endif %}
 {% endblock %}

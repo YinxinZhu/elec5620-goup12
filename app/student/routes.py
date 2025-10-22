@@ -1,23 +1,32 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, time, timedelta
 from math import ceil
 import random
 
-from flask import Blueprint, flash, redirect, render_template, request, session, url_for
+from flask import Blueprint, flash, g, redirect, render_template, request, session, url_for
 from flask_login import current_user, login_required
+from sqlalchemy import func
 
 from .. import db
-from ..i18n import get_language_choices
+from ..i18n import (
+    DEFAULT_LANGUAGE,
+    ensure_language_code,
+    get_language_choices,
+    translate_text,
+)
 from ..models import (
     Appointment,
     AvailabilitySlot,
     MockExamPaper,
+    MockExamSummary,
+    NotebookEntry,
     Question,
     Student,
     StudentExamSession,
+    StudentStateProgress,
 )
-from ..services import StateSwitchError, switch_student_state
+from ..services import StateSwitchError, get_questions_for_state, switch_student_state
 from ..services.mock_exam_sessions import (
     ExamQuestionScopeError,
     ExamRuleMissingError,
@@ -27,6 +36,13 @@ from ..services.mock_exam_sessions import (
     session_questions,
     start_session,
     submit_session,
+)
+from ..services.progress import (
+    ProgressAccessError,
+    ProgressValidationError,
+    ProgressTrendPoint,
+    get_progress_summary,
+    get_progress_trend,
 )
 
 student_bp = Blueprint("student", __name__, url_prefix="/student")
@@ -48,6 +64,19 @@ PRACTICE_DEFAULT_COUNT = 5
 PRACTICE_MAX_COUNT = 30
 
 
+def _t(message: str, **values: str) -> str:
+    language = ensure_language_code(getattr(g, "active_language", DEFAULT_LANGUAGE))
+    return translate_text(message, language, **values)
+
+
+STATUS_LABELS = {
+    "booked": "Booked",
+    "pending_cancel": "Pending cancellation",
+    "cancelled": "Cancelled",
+    "completed": "Completed",
+}
+
+
 def _current_student() -> Student | None:
     if not current_user.is_authenticated:
         return None
@@ -60,7 +89,7 @@ def _current_student() -> Student | None:
 def _redirect_non_students():
     if not current_user.is_authenticated:
         return redirect(url_for("coach.login"))
-    flash("Only student accounts may access the learner portal.", "warning")
+    flash(_t("Only student accounts may access the learner portal."), "warning")
     return redirect(url_for("coach.dashboard"))
 
 
@@ -85,19 +114,495 @@ def dashboard():
     if not student:
         return _redirect_non_students()
 
-    upcoming_appointments = (
+    now = datetime.utcnow()
+    upcoming_records = (
         Appointment.query.join(AvailabilitySlot)
         .filter(Appointment.student_id == student.id)
-        .filter(AvailabilitySlot.start_time >= datetime.utcnow())
+        .filter(Appointment.status.in_(["booked", "pending_cancel"]))
+        .filter(AvailabilitySlot.start_time >= now)
         .order_by(AvailabilitySlot.start_time.asc())
         .all()
     )
+    upcoming_appointments: list[dict[str, object]] = []
+    for record in upcoming_records:
+        delta = record.slot.start_time - now
+        hours_until = delta.total_seconds() / 3600
+        if record.status == "pending_cancel":
+            cancel_mode = "pending"
+        elif hours_until < 2:
+            cancel_mode = "locked"
+        elif hours_until < 24:
+            cancel_mode = "needs_approval"
+        else:
+            cancel_mode = "self_service"
+        upcoming_appointments.append(
+            {
+                "appointment": record,
+                "hours_until": max(hours_until, 0.0),
+                "cancel_mode": cancel_mode,
+                "status_label": _t(
+                    STATUS_LABELS.get(
+                        record.status, record.status.replace("_", " ")
+                    )
+                ),
+            }
+        )
     latest_summary = student.mock_exam_summaries[-1] if student.mock_exam_summaries else None
+
+    assigned_coach = student.coach
+    available_slots: list[AvailabilitySlot] = []
+    if assigned_coach:
+        available_slots = (
+            AvailabilitySlot.query.filter_by(coach_id=assigned_coach.id, status="available")
+            .filter(AvailabilitySlot.start_time >= now)
+            .order_by(AvailabilitySlot.start_time.asc())
+            .limit(6)
+            .all()
+        )
 
     return render_template(
         "student/dashboard.html",
         upcoming_appointments=upcoming_appointments,
         latest_summary=latest_summary,
+        available_slots=available_slots,
+        assigned_coach=assigned_coach,
+    )
+
+
+@student_bp.route("/slots/<int:slot_id>/book", methods=["POST"])
+@login_required
+def book_slot(slot_id: int):
+    student = _current_student()
+    if not student:
+        return _redirect_non_students()
+
+    slot = AvailabilitySlot.query.filter_by(id=slot_id).first_or_404()
+
+    if not student.assigned_coach_id:
+        flash(_t("Assign a coach before booking a session."), "warning")
+        return redirect(url_for("student.dashboard"))
+
+    if slot.coach_id != student.assigned_coach_id:
+        flash(_t("This timeslot belongs to a different coach."), "danger")
+        return redirect(url_for("student.dashboard"))
+
+    if slot.start_time < datetime.utcnow():
+        flash(_t("This session is no longer available."), "warning")
+        return redirect(url_for("student.dashboard"))
+
+    if slot.status != "available" or (slot.appointment and slot.appointment.status == "booked"):
+        flash(
+            _t("That timeslot has already been reserved. Please choose another one."),
+            "warning",
+        )
+        return redirect(url_for("student.dashboard"))
+
+    appointment = Appointment(slot_id=slot.id, student_id=student.id)
+    slot.status = "booked"
+    db.session.add(appointment)
+    db.session.commit()
+
+    start_text = slot.start_time.strftime("%d %b %Y %H:%M")
+    flash(
+        _t(
+            "Session booked with {coach} on {start_time}.",
+            coach=slot.coach.name,
+            start_time=start_text,
+        ),
+        "success",
+    )
+    return redirect(url_for("student.dashboard"))
+
+
+@student_bp.route("/appointments/<int:appointment_id>/cancel", methods=["POST"])
+@login_required
+def cancel_appointment(appointment_id: int):
+    student = _current_student()
+    if not student:
+        return _redirect_non_students()
+
+    appointment = (
+        Appointment.query.join(AvailabilitySlot)
+        .filter(Appointment.id == appointment_id)
+        .filter(Appointment.student_id == student.id)
+        .first_or_404()
+    )
+
+    if appointment.status not in {"booked", "pending_cancel"}:
+        flash(_t("This session can no longer be modified."), "warning")
+        return redirect(url_for("student.dashboard"))
+
+    now = datetime.utcnow()
+    start_time = appointment.slot.start_time
+    hours_until = (start_time - now).total_seconds() / 3600
+
+    if appointment.status == "pending_cancel":
+        flash(_t("Your cancellation request is awaiting coach approval."), "info")
+        return redirect(url_for("student.dashboard"))
+
+    if hours_until < 2:
+        flash(
+            _t(
+                "Sessions cannot be cancelled within 2 hours of the start time. Please contact your coach directly."
+            ),
+            "danger",
+        )
+        return redirect(url_for("student.dashboard"))
+
+    if hours_until < 24:
+        appointment.status = "pending_cancel"
+        appointment.cancellation_requested_at = now
+        db.session.commit()
+        flash(
+            _t(
+                "Cancellation request sent. Your coach will confirm whether the session can be released."
+            ),
+            "info",
+        )
+        return redirect(url_for("student.dashboard"))
+
+    appointment.status = "cancelled"
+    appointment.cancellation_requested_at = now
+    appointment.slot.status = "available"
+    db.session.commit()
+    flash(_t("Session cancelled. The slot is now available for rebooking."), "success")
+    return redirect(url_for("student.dashboard"))
+
+
+@student_bp.route("/progress", methods=["GET", "POST"], endpoint="progress")
+@login_required
+def progress_overview():
+    student = _current_student()
+    if not student:
+        return _redirect_non_students()
+
+    def _normalise(code: str | None) -> str:
+        return (code or "").strip().upper()
+
+    def _parse_date_param(value: str | None):
+        if not value:
+            return None
+        try:
+            return datetime.strptime(value, "%Y-%m-%d").date()
+        except ValueError:
+            return None
+
+    requested_state = _normalise(request.args.get("state"))
+
+    progress_records = (
+        StudentStateProgress.query.with_entities(
+            func.upper(StudentStateProgress.state).label("state"),
+            StudentStateProgress.last_active_at,
+        )
+        .filter_by(student_id=student.id)
+        .order_by(StudentStateProgress.last_active_at.desc())
+        .all()
+    )
+
+    available_states: list[str] = []
+    seen: set[str] = set()
+    for state_code, _last_active in progress_records:
+        code = _normalise(state_code)
+        if code and code not in seen:
+            available_states.append(code)
+            seen.add(code)
+
+    current_state = _normalise(student.state)
+    if current_state and current_state not in seen:
+        available_states.insert(0, current_state)
+        seen.add(current_state)
+
+    selected_state = requested_state if requested_state in seen else None
+    if not selected_state and available_states:
+        selected_state = available_states[0]
+
+    request_data = request.args if request.method == "GET" else request.form
+    raw_topic = (request_data.get("topic") or "").strip()
+    start_date = _parse_date_param(request_data.get("start"))
+    end_date = _parse_date_param(request_data.get("end"))
+    filter_error: str | None = None
+    if start_date and end_date and start_date > end_date:
+        filter_error = _t("Start date must be before end date.")
+        start_date = end_date = None
+
+    start_at = datetime.combine(start_date, time.min) if start_date else None
+    end_at = datetime.combine(end_date, time.max) if end_date else None
+
+    today = datetime.utcnow().date()
+    trend_default_start = datetime.combine(today - timedelta(days=29), time.min)
+    trend_default_end = datetime.combine(today, time.max)
+    trend_start_at = start_at or trend_default_start
+    trend_end_at = end_at or trend_default_end
+
+    if request.method == "POST":
+        goal_state = _normalise(request.form.get("state")) or selected_state
+        try:
+            goal_completion = float(request.form.get("goal_completion", 0.0))
+            goal_accuracy = float(request.form.get("goal_accuracy", 0.0))
+        except ValueError:
+            flash(_t("Goals must be numeric values."), "danger")
+        else:
+            goal_completion = max(0.0, min(goal_completion, 100.0))
+            goal_accuracy = max(0.0, min(goal_accuracy, 100.0))
+            session["progress_goal"] = {
+                "completion": goal_completion,
+                "accuracy": goal_accuracy,
+            }
+            flash(_t("Progress goals updated."), "success")
+
+        redirect_params = {}
+        target_state = goal_state if goal_state in seen else selected_state
+        if target_state:
+            redirect_params["state"] = target_state
+        if raw_topic:
+            redirect_params["topic"] = raw_topic
+        if start_date:
+            redirect_params["start"] = start_date.isoformat()
+        if end_date:
+            redirect_params["end"] = end_date.isoformat()
+        return redirect(url_for("student.progress", **redirect_params))
+
+    summary = None
+    error_message: str | None = None
+    completion_pct = pending_pct = accuracy_pct = incorrect_pct = 0.0
+    available_topics: list[str] = []
+    trend_points: list[ProgressTrendPoint] = []
+    recent_exams = []
+    recent_exam_stats: dict[str, float | int | None] | None = None
+    wrong_preview: list[dict[str, object]] = []
+
+    if selected_state:
+        question_bank = get_questions_for_state(
+            selected_state, language=student.preferred_language
+        )
+        available_topics = sorted(
+            {question.topic for question in question_bank if question.topic}
+        )
+        topic_param = raw_topic or None
+        try:
+            summary = get_progress_summary(
+                student,
+                state=selected_state,
+                acting_student=student,
+                start_at=start_at,
+                end_at=end_at,
+                topic=topic_param,
+            )
+            trend_points = get_progress_trend(
+                student,
+                state=selected_state,
+                acting_student=student,
+                start_at=trend_start_at,
+                end_at=trend_end_at,
+                topic=topic_param,
+            )
+        except (ProgressValidationError, ProgressAccessError) as exc:
+            error_message = str(exc)
+
+        if summary:
+            def _percent(part: int, whole: int) -> float:
+                if whole <= 0:
+                    return 0.0
+                return round((part / whole) * 100, 1)
+
+            completion_pct = _percent(summary.done, summary.total)
+            pending_pct = round(max(0.0, 100.0 - completion_pct), 1)
+            accuracy_pct = _percent(summary.correct, summary.done)
+            incorrect_pct = round(max(0.0, 100.0 - accuracy_pct), 1)
+
+        if not error_message:
+            exam_query = MockExamSummary.query.filter_by(
+                student_id=student.id, state=selected_state
+            )
+            if start_at:
+                exam_query = exam_query.filter(MockExamSummary.taken_at >= start_at)
+            if end_at:
+                exam_query = exam_query.filter(MockExamSummary.taken_at <= end_at)
+            recent_exams = exam_query.order_by(
+                MockExamSummary.taken_at.desc()
+            ).limit(5).all()
+
+            scores = [exam.score for exam in recent_exams if exam.score is not None]
+            if scores:
+                recent_exam_stats = {
+                    "average_score": round(sum(scores) / len(scores), 1),
+                    "best_score": max(scores),
+                }
+
+            wrong_query = NotebookEntry.query.filter_by(
+                student_id=student.id, state=selected_state
+            )
+            topic_lower = (raw_topic or "").lower()
+            if topic_lower:
+                wrong_query = wrong_query.join(NotebookEntry.question).filter(
+                    func.lower(Question.topic) == topic_lower
+                )
+            if start_at:
+                wrong_query = wrong_query.filter(NotebookEntry.last_wrong_at >= start_at)
+            if end_at:
+                wrong_query = wrong_query.filter(NotebookEntry.last_wrong_at <= end_at)
+            wrong_entries = (
+                wrong_query.order_by(NotebookEntry.last_wrong_at.desc().nullslast())
+                .limit(3)
+                .all()
+            )
+            wrong_preview = [
+                {
+                    "qid": entry.question.qid,
+                    "topic": entry.question.topic,
+                    "wrong_count": entry.wrong_count,
+                    "last_wrong_at": entry.last_wrong_at,
+                }
+                for entry in wrong_entries
+            ]
+
+    saved_goal = session.get("progress_goal") or {}
+    goal_completion = float(saved_goal.get("completion", 80.0))
+    goal_accuracy = float(saved_goal.get("accuracy", 80.0))
+    goal_status = {
+        "completion": goal_completion,
+        "accuracy": goal_accuracy,
+        "completion_met": summary is not None and completion_pct >= goal_completion,
+        "accuracy_met": summary is not None and accuracy_pct >= goal_accuracy,
+        "completion_gap": round(
+            max(goal_completion - completion_pct, 0.0), 1
+        )
+        if summary
+        else goal_completion,
+        "accuracy_gap": round(max(goal_accuracy - accuracy_pct, 0.0), 1)
+        if summary
+        else goal_accuracy,
+    }
+
+    trend_payload = [
+        {
+            "day": point.day.isoformat(),
+            "attempted": point.attempted,
+            "correct": point.correct,
+            "accuracy": point.accuracy,
+        }
+        for point in trend_points
+    ]
+
+    trend_summary = None
+    if trend_points:
+        trend_summary = {
+            "average_attempted": round(
+                sum(point.attempted for point in trend_points) / len(trend_points), 1
+            ),
+            "average_accuracy": round(
+                sum(point.accuracy for point in trend_points) / len(trend_points), 1
+            ),
+        }
+
+    export_params = {}
+    if selected_state:
+        export_params["state"] = selected_state
+    if raw_topic:
+        export_params["topic"] = raw_topic
+    if start_date:
+        export_params["start"] = start_date.isoformat()
+    if end_date:
+        export_params["end"] = end_date.isoformat()
+    export_url = url_for("api.progress_export", **export_params) if selected_state else None
+
+    goal_form_defaults = {
+        "state": selected_state or "",
+        "completion": goal_completion,
+        "accuracy": goal_accuracy,
+        "start": start_date.isoformat() if start_date else "",
+        "end": end_date.isoformat() if end_date else "",
+        "topic": raw_topic,
+    }
+
+    trend_range = {
+        "start": trend_start_at.date(),
+        "end": trend_end_at.date(),
+    }
+
+    return render_template(
+        "student/progress.html",
+        available_states=available_states,
+        selected_state=selected_state,
+        available_topics=available_topics,
+        topic_filter=raw_topic,
+        start_date=start_date,
+        end_date=end_date,
+        filter_error=filter_error,
+        summary=summary,
+        error_message=error_message,
+        completion_pct=completion_pct,
+        pending_pct=pending_pct,
+        accuracy_pct=accuracy_pct,
+        incorrect_pct=incorrect_pct,
+        export_url=export_url,
+        trend_points=trend_payload,
+        trend_summary=trend_summary,
+        trend_range=trend_range,
+        recent_exams=recent_exams,
+        recent_exam_stats=recent_exam_stats,
+        wrong_preview=wrong_preview,
+        goal_status=goal_status,
+        goal_form_defaults=goal_form_defaults,
+    )
+
+
+@student_bp.route("/notebook")
+@login_required
+def notebook():
+    student = _current_student()
+    if not student:
+        return _redirect_non_students()
+
+    def _normalise(code: str | None) -> str:
+        return (code or "").strip().upper()
+
+    requested_state = _normalise(request.args.get("state"))
+
+    progress_records = (
+        StudentStateProgress.query.with_entities(
+            func.upper(StudentStateProgress.state).label("state"),
+            StudentStateProgress.last_active_at,
+        )
+        .filter_by(student_id=student.id)
+        .order_by(StudentStateProgress.last_active_at.desc())
+        .all()
+    )
+
+    available_states: list[str] = []
+    seen: set[str] = set()
+    for state_code, _last_active in progress_records:
+        code = _normalise(state_code)
+        if code and code not in seen:
+            available_states.append(code)
+            seen.add(code)
+
+    current_state = _normalise(student.state)
+    if current_state and current_state not in seen:
+        available_states.insert(0, current_state)
+        seen.add(current_state)
+
+    selected_state = requested_state if requested_state in seen else None
+    if not selected_state and available_states:
+        selected_state = available_states[0]
+
+    entries = []
+    total_wrong = 0
+    if selected_state:
+        notebook_query = (
+            NotebookEntry.query.filter_by(student_id=student.id, state=selected_state)
+            .join(NotebookEntry.question)
+            .order_by(NotebookEntry.last_wrong_at.desc().nullslast())
+        )
+        entries = notebook_query.all()
+        total_wrong = sum(entry.wrong_count for entry in entries)
+
+    return render_template(
+        "student/notebook.html",
+        available_states=available_states,
+        selected_state=selected_state,
+        entries=entries,
+        total_wrong=total_wrong,
     )
 
 
@@ -112,7 +617,7 @@ def profile():
         student.name = request.form.get("name", student.name)
         email = (request.form.get("email") or "").strip() or None
         if email and Student.query.filter(Student.email == email, Student.id != student.id).first():
-            flash("Another student account already uses that email address.", "danger")
+            flash(_t("Another student account already uses that email address."), "danger")
             return render_template(
                 "student/profile.html",
                 state_choices=STATE_CHOICES,
@@ -122,7 +627,7 @@ def profile():
 
         state_choice = (request.form.get("state") or "").strip().upper()
         if state_choice not in STATE_CHOICES:
-            flash("Please choose a valid state or territory.", "danger")
+            flash(_t("Please choose a valid state or territory."), "danger")
             return render_template(
                 "student/profile.html",
                 state_choices=STATE_CHOICES,
@@ -134,7 +639,7 @@ def profile():
             student.preferred_language = language_choice
             session["preferred_language"] = language_choice
         else:
-            flash("Please choose a supported language.", "danger")
+            flash(_t("Please choose a supported language."), "danger")
             return render_template(
                 "student/profile.html",
                 state_choices=STATE_CHOICES,
@@ -145,7 +650,7 @@ def profile():
         confirm_password = request.form.get("confirm_password", "")
         if new_password:
             if new_password != confirm_password:
-                flash("Passwords do not match.", "danger")
+                flash(_t("Passwords do not match."), "danger")
                 return render_template(
                     "student/profile.html",
                     state_choices=STATE_CHOICES,
@@ -172,7 +677,7 @@ def profile():
 
         if switch_summary:
             flash(switch_summary, "info")
-        flash("Profile updated successfully!", "success")
+        flash(_t("Profile updated successfully!"), "success")
         return redirect(url_for("student.profile"))
 
     return render_template(
@@ -225,12 +730,12 @@ def start_exam(paper_id: int):
 
     paper = MockExamPaper.query.filter_by(id=paper_id, state=student.state).first()
     if not paper:
-        flash("Selected exam paper is not available for your state.", "warning")
+        flash(_t("Selected exam paper is not available for your state."), "warning")
         return redirect(url_for("student.exams"))
 
     allowed_states = {student.state, "ALL"}
     if not any(pq.question.state_scope in allowed_states for pq in paper.questions):
-        flash("This paper has no questions aligned with your state syllabus.", "warning")
+        flash(_t("This paper has no questions aligned with your state syllabus."), "warning")
         return redirect(url_for("student.exams"))
 
     try:
@@ -255,7 +760,7 @@ def exam_session(session_id: int):
 
     questions = session_questions(session_obj)
     if not questions:
-        flash("Exam paper has no questions configured.", "warning")
+        flash(_t("Exam paper has no questions configured."), "warning")
         return redirect(url_for("student.exams"))
 
     try:
@@ -268,13 +773,13 @@ def exam_session(session_id: int):
         if action == "submit_exam":
             try:
                 submit_session(session_obj)
-                flash("Exam submitted successfully.", "success")
+                flash(_t("Exam submitted successfully."), "success")
             except ExamRuleMissingError as exc:
                 flash(str(exc), "danger")
             return redirect(url_for("student.exam_session", session_id=session_id))
 
         if session_obj.status != "ongoing":
-            flash("Exam session already finished.", "info")
+            flash(_t("Exam session already finished."), "info")
             return redirect(url_for("student.exam_session", session_id=session_id))
 
         selected_option = (request.form.get("selected_option") or "").strip().upper()
@@ -285,13 +790,13 @@ def exam_session(session_id: int):
             question_id_int = 0
 
         if selected_option not in VALID_OPTIONS or not question_id_int:
-            flash("Please choose an answer option before saving.", "warning")
+            flash(_t("Please choose an answer option before saving."), "warning")
         else:
             try:
                 record_answer(session_obj, question_id_int, selected_option)
-                flash("Answer saved.", "success")
+                flash(_t("Answer saved."), "success")
             except ExamQuestionScopeError:
-                flash("Question not part of this exam.", "danger")
+                flash(_t("Question not part of this exam."), "danger")
 
         try:
             navigate_to = int(request.form.get("navigate_to", current_index + 1))
@@ -392,7 +897,7 @@ def practice():
 
         questions = query.all()
         if not questions:
-            flash("No questions available for the selected criteria.", "warning")
+            flash(_t("No questions available for the selected criteria."), "warning")
             return redirect(url_for("student.exams"))
 
         selected = random.sample(questions, min(count, len(questions)))
@@ -403,7 +908,7 @@ def practice():
 
     question_ids: list[int] = session.get("practice_questions", [])
     if not question_ids:
-        flash("Start a practice session from the exam hub.", "info")
+        flash(_t("Start a practice session from the exam hub."), "info")
         return redirect(url_for("student.exams"))
 
     questions = Question.query.filter(Question.id.in_(question_ids)).all()
