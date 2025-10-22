@@ -96,13 +96,34 @@ def dashboard():
     if not student:
         return _redirect_non_students()
 
-    upcoming_appointments = (
+    now = datetime.utcnow()
+    upcoming_records = (
         Appointment.query.join(AvailabilitySlot)
         .filter(Appointment.student_id == student.id)
-        .filter(AvailabilitySlot.start_time >= datetime.utcnow())
+        .filter(Appointment.status.in_(["booked", "pending_cancel"]))
+        .filter(AvailabilitySlot.start_time >= now)
         .order_by(AvailabilitySlot.start_time.asc())
         .all()
     )
+    upcoming_appointments: list[dict[str, object]] = []
+    for record in upcoming_records:
+        delta = record.slot.start_time - now
+        hours_until = delta.total_seconds() / 3600
+        if record.status == "pending_cancel":
+            cancel_mode = "pending"
+        elif hours_until < 2:
+            cancel_mode = "locked"
+        elif hours_until < 24:
+            cancel_mode = "needs_approval"
+        else:
+            cancel_mode = "self_service"
+        upcoming_appointments.append(
+            {
+                "appointment": record,
+                "hours_until": max(hours_until, 0.0),
+                "cancel_mode": cancel_mode,
+            }
+        )
     latest_summary = student.mock_exam_summaries[-1] if student.mock_exam_summaries else None
 
     assigned_coach = student.coach
@@ -110,7 +131,7 @@ def dashboard():
     if assigned_coach:
         available_slots = (
             AvailabilitySlot.query.filter_by(coach_id=assigned_coach.id, status="available")
-            .filter(AvailabilitySlot.start_time >= datetime.utcnow())
+            .filter(AvailabilitySlot.start_time >= now)
             .order_by(AvailabilitySlot.start_time.asc())
             .limit(6)
             .all()
@@ -160,6 +181,57 @@ def book_slot(slot_id: int):
         f"Session booked with {slot.coach.name} on {start_text}.",
         "success",
     )
+    return redirect(url_for("student.dashboard"))
+
+
+@student_bp.route("/appointments/<int:appointment_id>/cancel", methods=["POST"])
+@login_required
+def cancel_appointment(appointment_id: int):
+    student = _current_student()
+    if not student:
+        return _redirect_non_students()
+
+    appointment = (
+        Appointment.query.join(AvailabilitySlot)
+        .filter(Appointment.id == appointment_id)
+        .filter(Appointment.student_id == student.id)
+        .first_or_404()
+    )
+
+    if appointment.status not in {"booked", "pending_cancel"}:
+        flash("This session can no longer be modified.", "warning")
+        return redirect(url_for("student.dashboard"))
+
+    now = datetime.utcnow()
+    start_time = appointment.slot.start_time
+    hours_until = (start_time - now).total_seconds() / 3600
+
+    if appointment.status == "pending_cancel":
+        flash("Your cancellation request is awaiting coach approval.", "info")
+        return redirect(url_for("student.dashboard"))
+
+    if hours_until < 2:
+        flash(
+            "Sessions cannot be cancelled within 2 hours of the start time. Please contact your coach directly.",
+            "danger",
+        )
+        return redirect(url_for("student.dashboard"))
+
+    if hours_until < 24:
+        appointment.status = "pending_cancel"
+        appointment.cancellation_requested_at = now
+        db.session.commit()
+        flash(
+            "Cancellation request sent. Your coach will confirm whether the session can be released.",
+            "info",
+        )
+        return redirect(url_for("student.dashboard"))
+
+    appointment.status = "cancelled"
+    appointment.cancellation_requested_at = now
+    appointment.slot.status = "available"
+    db.session.commit()
+    flash("Session cancelled. The slot is now available for rebooking.", "success")
     return redirect(url_for("student.dashboard"))
 
 

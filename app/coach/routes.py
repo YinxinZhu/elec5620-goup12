@@ -329,7 +329,9 @@ def dashboard():
         upcoming_slots = slot_query.limit(5).all()
         student_count = Student.query.count()
         pending_bookings = (
-            Appointment.query.filter(Appointment.status == "booked").count()
+            Appointment.query.filter(
+                Appointment.status.in_(["booked", "pending_cancel"])
+            ).count()
         )
     else:
         upcoming_slots = (
@@ -343,7 +345,7 @@ def dashboard():
         pending_bookings = (
             Appointment.query.join(AvailabilitySlot)
             .filter(AvailabilitySlot.coach_id == current_user.id)
-            .filter(Appointment.status == "booked")
+            .filter(Appointment.status.in_(["booked", "pending_cancel"]))
             .count()
         )
     return render_template(
@@ -527,7 +529,8 @@ def update_appointment_status(appointment_id: int):
         appointment_query.filter(Appointment.id == appointment_id).first_or_404()
     )
     status = request.form.get("status")
-    if status not in {"booked", "cancelled", "completed"}:
+    valid_statuses = {"booked", "pending_cancel", "cancelled", "completed"}
+    if status not in valid_statuses:
         flash("Invalid status", "danger")
         return redirect(url_for("coach.appointments"))
     appointment.status = status
@@ -535,6 +538,12 @@ def update_appointment_status(appointment_id: int):
         appointment.slot.status = "available"
     elif status == "completed":
         appointment.slot.status = "unavailable"
+    else:
+        appointment.slot.status = "booked"
+    if status == "booked":
+        appointment.cancellation_requested_at = None
+    elif status == "pending_cancel" and not appointment.cancellation_requested_at:
+        appointment.cancellation_requested_at = datetime.utcnow()
     db.session.commit()
     flash("Appointment updated", "success")
     return redirect(url_for("coach.appointments"))

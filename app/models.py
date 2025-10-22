@@ -465,10 +465,17 @@ class Appointment(db.Model):
     slot_id = db.Column(db.Integer, db.ForeignKey("availability_slots.id"), nullable=False)
     student_id = db.Column(db.Integer, db.ForeignKey("students.id"), nullable=False)
     status = db.Column(
-        Enum("booked", "cancelled", "completed", name="booking_status"),
+        Enum(
+            "booked",
+            "pending_cancel",
+            "cancelled",
+            "completed",
+            name="booking_status",
+        ),
         default="booked",
         nullable=False,
     )
+    cancellation_requested_at = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     updated_at = db.Column(
         db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False

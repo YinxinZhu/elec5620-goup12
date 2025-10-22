@@ -119,7 +119,10 @@ learner self-registration form directly beneath the login action.
   sessions are persisted so refreshes do not lose progress.
 - The learner dashboard surfaces the assigned coach's upcoming availability and
   lets students book open slots directly. Confirmations immediately convert the
-  slot to a booked state on both the student and coach dashboards.
+  slot to a booked state on both the student and coach dashboards, while
+  cancellation windows follow the training policy: more than 24 hours' notice
+  cancels instantly, requests within 24 hours but outside two hours require
+  coach approval, and the final two-hour window locks the booking.
 - Question banks and exam papers respect state boundaries: uploading questions
   or building papers captures the state scope, and students only see the
   variants targeted to their chosen jurisdiction.

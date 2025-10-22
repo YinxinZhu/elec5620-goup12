@@ -32,12 +32,19 @@
         </td>
         {% endif %}
         <td>
-          <span class="badge bg-{{ 'success' if appointment.status == 'booked' else 'secondary' if appointment.status == 'completed' else 'danger' }}">{{ appointment.status|capitalize }}</span>
+          {% set badge_lookup = {
+            'booked': 'success',
+            'pending_cancel': 'warning',
+            'completed': 'secondary',
+            'cancelled': 'danger'
+          } %}
+          <span class="badge bg-{{ badge_lookup.get(appointment.status, 'light') }}">{{ appointment.status.replace('_', ' ')|title }}</span>
         </td>
         <td>
           <form method="post" action="{{ url_for('coach.update_appointment_status', appointment_id=appointment.id) }}" class="d-flex gap-2">
             <select class="form-select form-select-sm" name="status">
               <option value="booked" {% if appointment.status == 'booked' %}selected{% endif %}>Booked</option>
+              <option value="pending_cancel" {% if appointment.status == 'pending_cancel' %}selected{% endif %}>Pending cancellation</option>
               <option value="completed" {% if appointment.status == 'completed' %}selected{% endif %}>Completed</option>
               <option value="cancelled" {% if appointment.status == 'cancelled' %}selected{% endif %}>Cancelled</option>
             </select>

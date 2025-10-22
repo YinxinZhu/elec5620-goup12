@@ -63,22 +63,24 @@ def sample_data(app_context):
     student.set_password("password123")
     coach_nsw = Coach(
         email="nsw@example.com",
-        password_hash="hash",
+        password_hash="",
         name="Alex",
         mobile_number="0400001000",
         city="Sydney",
         state="NSW",
         vehicle_types="AT",
     )
+    coach_nsw.set_password("coachpass")
     coach_vic = Coach(
         email="vic@example.com",
-        password_hash="hash",
+        password_hash="",
         name="Casey",
         mobile_number="0400001001",
         city="Melbourne",
         state="VIC",
         vehicle_types="MT",
     )
+    coach_vic.set_password("coachpass")
 
     questions = [
         Question(
@@ -181,6 +183,14 @@ def sample_data(app_context):
 
 
 def _login_student(client, mobile: str, password: str) -> None:
+    client.post(
+        "/coach/login",
+        data={"mobile_number": mobile, "password": password},
+        follow_redirects=True,
+    )
+
+
+def _login_coach(client, mobile: str, password: str) -> None:
     client.post(
         "/coach/login",
         data={"mobile_number": mobile, "password": password},
@@ -323,6 +333,155 @@ def test_student_can_book_assigned_coach_slot(app_context, sample_data):
         assert preserved_slot.status == "available"
 
 
+def test_student_cancellation_windows(app_context, sample_data):
+    client = app_context.test_client()
+    _login_student(client, "0400000001", "password123")
+
+    with app_context.app_context():
+        student_record = db.session.get(Student, sample_data.id)
+        assert student_record is not None
+        coach = db.session.get(Coach, student_record.assigned_coach_id)
+        assert coach is not None
+        now = datetime.utcnow()
+        far_slot = AvailabilitySlot(
+            coach_id=coach.id,
+            start_time=now + timedelta(days=2),
+            duration_minutes=60,
+            location_text="Long notice",
+            status="booked",
+        )
+        mid_slot = AvailabilitySlot(
+            coach_id=coach.id,
+            start_time=now + timedelta(hours=6),
+            duration_minutes=60,
+            location_text="Needs approval",
+            status="booked",
+        )
+        near_slot = AvailabilitySlot(
+            coach_id=coach.id,
+            start_time=now + timedelta(hours=1, minutes=30),
+            duration_minutes=60,
+            location_text="Too late",
+            status="booked",
+        )
+        db.session.add_all([far_slot, mid_slot, near_slot])
+        db.session.flush()
+        far_appt = Appointment(slot=far_slot, student_id=student_record.id)
+        mid_appt = Appointment(slot=mid_slot, student_id=student_record.id)
+        near_appt = Appointment(slot=near_slot, student_id=student_record.id)
+        db.session.add_all([far_appt, mid_appt, near_appt])
+        db.session.commit()
+        far_id, mid_id, near_id = far_appt.id, mid_appt.id, near_appt.id
+
+    immediate = client.post(
+        f"/student/appointments/{far_id}/cancel",
+        follow_redirects=True,
+    )
+    assert immediate.status_code == 200
+    immediate_html = immediate.get_data(as_text=True)
+    assert "Session cancelled" in immediate_html
+
+    with app_context.app_context():
+        refreshed_far = db.session.get(Appointment, far_id)
+        assert refreshed_far is not None
+        assert refreshed_far.status == "cancelled"
+        assert refreshed_far.slot.status == "available"
+        assert refreshed_far.cancellation_requested_at is not None
+
+    pending = client.post(
+        f"/student/appointments/{mid_id}/cancel",
+        follow_redirects=True,
+    )
+    assert pending.status_code == 200
+    pending_html = pending.get_data(as_text=True)
+    assert "Cancellation request" in pending_html
+
+    with app_context.app_context():
+        refreshed_mid = db.session.get(Appointment, mid_id)
+        assert refreshed_mid is not None
+        assert refreshed_mid.status == "pending_cancel"
+        assert refreshed_mid.slot.status == "booked"
+        assert refreshed_mid.cancellation_requested_at is not None
+
+    too_late = client.post(
+        f"/student/appointments/{near_id}/cancel",
+        follow_redirects=True,
+    )
+    assert too_late.status_code == 200
+    too_late_html = too_late.get_data(as_text=True)
+    assert "cannot be cancelled" in too_late_html
+
+    with app_context.app_context():
+        refreshed_near = db.session.get(Appointment, near_id)
+        assert refreshed_near is not None
+        assert refreshed_near.status == "booked"
+        assert refreshed_near.cancellation_requested_at is None
+
+
+def test_coach_can_process_cancellation_requests(app_context, sample_data):
+    client = app_context.test_client()
+
+    with app_context.app_context():
+        student_record = db.session.get(Student, sample_data.id)
+        assert student_record is not None
+        coach = db.session.get(Coach, student_record.assigned_coach_id)
+        assert coach is not None
+        slot = AvailabilitySlot(
+            coach_id=coach.id,
+            start_time=datetime.utcnow() + timedelta(days=1),
+            duration_minutes=60,
+            location_text="Decision slot",
+            status="booked",
+        )
+        db.session.add(slot)
+        db.session.flush()
+        appointment = Appointment(slot=slot, student_id=student_record.id)
+        db.session.add(appointment)
+        db.session.commit()
+        appointment_id = appointment.id
+
+    _login_coach(client, "0400001000", "coachpass")
+
+    to_pending = client.post(
+        f"/coach/appointments/{appointment_id}/status",
+        data={"status": "pending_cancel"},
+        follow_redirects=True,
+    )
+    assert to_pending.status_code == 200
+
+    with app_context.app_context():
+        pending_appt = db.session.get(Appointment, appointment_id)
+        assert pending_appt is not None
+        assert pending_appt.status == "pending_cancel"
+        assert pending_appt.slot.status == "booked"
+        assert pending_appt.cancellation_requested_at is not None
+
+    deny = client.post(
+        f"/coach/appointments/{appointment_id}/status",
+        data={"status": "booked"},
+        follow_redirects=True,
+    )
+    assert deny.status_code == 200
+
+    with app_context.app_context():
+        denied_appt = db.session.get(Appointment, appointment_id)
+        assert denied_appt is not None
+        assert denied_appt.status == "booked"
+        assert denied_appt.slot.status == "booked"
+        assert denied_appt.cancellation_requested_at is None
+
+    approve = client.post(
+        f"/coach/appointments/{appointment_id}/status",
+        data={"status": "cancelled"},
+        follow_redirects=True,
+    )
+    assert approve.status_code == 200
+
+    with app_context.app_context():
+        cancelled_appt = db.session.get(Appointment, appointment_id)
+        assert cancelled_appt is not None
+        assert cancelled_appt.status == "cancelled"
+        assert cancelled_appt.slot.status == "available"
 @pytest.fixture
 def progress_dataset(sample_data):
     student = sample_data
