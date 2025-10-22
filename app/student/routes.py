@@ -4,12 +4,17 @@ from datetime import datetime, time, timedelta
 from math import ceil
 import random
 
-from flask import Blueprint, flash, redirect, render_template, request, session, url_for
+from flask import Blueprint, flash, g, redirect, render_template, request, session, url_for
 from flask_login import current_user, login_required
 from sqlalchemy import func
 
 from .. import db
-from ..i18n import get_language_choices
+from ..i18n import (
+    DEFAULT_LANGUAGE,
+    ensure_language_code,
+    get_language_choices,
+    translate_text,
+)
 from ..models import (
     Appointment,
     AvailabilitySlot,
@@ -59,6 +64,19 @@ PRACTICE_DEFAULT_COUNT = 5
 PRACTICE_MAX_COUNT = 30
 
 
+def _t(message: str, **values: str) -> str:
+    language = ensure_language_code(getattr(g, "active_language", DEFAULT_LANGUAGE))
+    return translate_text(message, language, **values)
+
+
+STATUS_LABELS = {
+    "booked": "Booked",
+    "pending_cancel": "Pending cancellation",
+    "cancelled": "Cancelled",
+    "completed": "Completed",
+}
+
+
 def _current_student() -> Student | None:
     if not current_user.is_authenticated:
         return None
@@ -71,7 +89,7 @@ def _current_student() -> Student | None:
 def _redirect_non_students():
     if not current_user.is_authenticated:
         return redirect(url_for("coach.login"))
-    flash("Only student accounts may access the learner portal.", "warning")
+    flash(_t("Only student accounts may access the learner portal."), "warning")
     return redirect(url_for("coach.dashboard"))
 
 
@@ -122,6 +140,11 @@ def dashboard():
                 "appointment": record,
                 "hours_until": max(hours_until, 0.0),
                 "cancel_mode": cancel_mode,
+                "status_label": _t(
+                    STATUS_LABELS.get(
+                        record.status, record.status.replace("_", " ")
+                    )
+                ),
             }
         )
     latest_summary = student.mock_exam_summaries[-1] if student.mock_exam_summaries else None
@@ -156,19 +179,22 @@ def book_slot(slot_id: int):
     slot = AvailabilitySlot.query.filter_by(id=slot_id).first_or_404()
 
     if not student.assigned_coach_id:
-        flash("Assign a coach before booking a session.", "warning")
+        flash(_t("Assign a coach before booking a session."), "warning")
         return redirect(url_for("student.dashboard"))
 
     if slot.coach_id != student.assigned_coach_id:
-        flash("This timeslot belongs to a different coach.", "danger")
+        flash(_t("This timeslot belongs to a different coach."), "danger")
         return redirect(url_for("student.dashboard"))
 
     if slot.start_time < datetime.utcnow():
-        flash("This session is no longer available.", "warning")
+        flash(_t("This session is no longer available."), "warning")
         return redirect(url_for("student.dashboard"))
 
     if slot.status != "available" or (slot.appointment and slot.appointment.status == "booked"):
-        flash("That timeslot has already been reserved. Please choose another one.", "warning")
+        flash(
+            _t("That timeslot has already been reserved. Please choose another one."),
+            "warning",
+        )
         return redirect(url_for("student.dashboard"))
 
     appointment = Appointment(slot_id=slot.id, student_id=student.id)
@@ -178,7 +204,11 @@ def book_slot(slot_id: int):
 
     start_text = slot.start_time.strftime("%d %b %Y %H:%M")
     flash(
-        f"Session booked with {slot.coach.name} on {start_text}.",
+        _t(
+            "Session booked with {coach} on {start_time}.",
+            coach=slot.coach.name,
+            start_time=start_text,
+        ),
         "success",
     )
     return redirect(url_for("student.dashboard"))
@@ -199,7 +229,7 @@ def cancel_appointment(appointment_id: int):
     )
 
     if appointment.status not in {"booked", "pending_cancel"}:
-        flash("This session can no longer be modified.", "warning")
+        flash(_t("This session can no longer be modified."), "warning")
         return redirect(url_for("student.dashboard"))
 
     now = datetime.utcnow()
@@ -207,12 +237,14 @@ def cancel_appointment(appointment_id: int):
     hours_until = (start_time - now).total_seconds() / 3600
 
     if appointment.status == "pending_cancel":
-        flash("Your cancellation request is awaiting coach approval.", "info")
+        flash(_t("Your cancellation request is awaiting coach approval."), "info")
         return redirect(url_for("student.dashboard"))
 
     if hours_until < 2:
         flash(
-            "Sessions cannot be cancelled within 2 hours of the start time. Please contact your coach directly.",
+            _t(
+                "Sessions cannot be cancelled within 2 hours of the start time. Please contact your coach directly."
+            ),
             "danger",
         )
         return redirect(url_for("student.dashboard"))
@@ -222,7 +254,9 @@ def cancel_appointment(appointment_id: int):
         appointment.cancellation_requested_at = now
         db.session.commit()
         flash(
-            "Cancellation request sent. Your coach will confirm whether the session can be released.",
+            _t(
+                "Cancellation request sent. Your coach will confirm whether the session can be released."
+            ),
             "info",
         )
         return redirect(url_for("student.dashboard"))
@@ -231,7 +265,7 @@ def cancel_appointment(appointment_id: int):
     appointment.cancellation_requested_at = now
     appointment.slot.status = "available"
     db.session.commit()
-    flash("Session cancelled. The slot is now available for rebooking.", "success")
+    flash(_t("Session cancelled. The slot is now available for rebooking."), "success")
     return redirect(url_for("student.dashboard"))
 
 
@@ -288,7 +322,7 @@ def progress_overview():
     end_date = _parse_date_param(request_data.get("end"))
     filter_error: str | None = None
     if start_date and end_date and start_date > end_date:
-        filter_error = "Start date must be before end date."
+        filter_error = _t("Start date must be before end date.")
         start_date = end_date = None
 
     start_at = datetime.combine(start_date, time.min) if start_date else None
@@ -306,7 +340,7 @@ def progress_overview():
             goal_completion = float(request.form.get("goal_completion", 0.0))
             goal_accuracy = float(request.form.get("goal_accuracy", 0.0))
         except ValueError:
-            flash("Goals must be numeric values.", "danger")
+            flash(_t("Goals must be numeric values."), "danger")
         else:
             goal_completion = max(0.0, min(goal_completion, 100.0))
             goal_accuracy = max(0.0, min(goal_accuracy, 100.0))
@@ -314,7 +348,7 @@ def progress_overview():
                 "completion": goal_completion,
                 "accuracy": goal_accuracy,
             }
-            flash("Progress goals updated.", "success")
+            flash(_t("Progress goals updated."), "success")
 
         redirect_params = {}
         target_state = goal_state if goal_state in seen else selected_state
@@ -583,7 +617,7 @@ def profile():
         student.name = request.form.get("name", student.name)
         email = (request.form.get("email") or "").strip() or None
         if email and Student.query.filter(Student.email == email, Student.id != student.id).first():
-            flash("Another student account already uses that email address.", "danger")
+            flash(_t("Another student account already uses that email address."), "danger")
             return render_template(
                 "student/profile.html",
                 state_choices=STATE_CHOICES,
@@ -593,7 +627,7 @@ def profile():
 
         state_choice = (request.form.get("state") or "").strip().upper()
         if state_choice not in STATE_CHOICES:
-            flash("Please choose a valid state or territory.", "danger")
+            flash(_t("Please choose a valid state or territory."), "danger")
             return render_template(
                 "student/profile.html",
                 state_choices=STATE_CHOICES,
@@ -605,7 +639,7 @@ def profile():
             student.preferred_language = language_choice
             session["preferred_language"] = language_choice
         else:
-            flash("Please choose a supported language.", "danger")
+            flash(_t("Please choose a supported language."), "danger")
             return render_template(
                 "student/profile.html",
                 state_choices=STATE_CHOICES,
@@ -616,7 +650,7 @@ def profile():
         confirm_password = request.form.get("confirm_password", "")
         if new_password:
             if new_password != confirm_password:
-                flash("Passwords do not match.", "danger")
+                flash(_t("Passwords do not match."), "danger")
                 return render_template(
                     "student/profile.html",
                     state_choices=STATE_CHOICES,
@@ -643,7 +677,7 @@ def profile():
 
         if switch_summary:
             flash(switch_summary, "info")
-        flash("Profile updated successfully!", "success")
+        flash(_t("Profile updated successfully!"), "success")
         return redirect(url_for("student.profile"))
 
     return render_template(
@@ -696,12 +730,12 @@ def start_exam(paper_id: int):
 
     paper = MockExamPaper.query.filter_by(id=paper_id, state=student.state).first()
     if not paper:
-        flash("Selected exam paper is not available for your state.", "warning")
+        flash(_t("Selected exam paper is not available for your state."), "warning")
         return redirect(url_for("student.exams"))
 
     allowed_states = {student.state, "ALL"}
     if not any(pq.question.state_scope in allowed_states for pq in paper.questions):
-        flash("This paper has no questions aligned with your state syllabus.", "warning")
+        flash(_t("This paper has no questions aligned with your state syllabus."), "warning")
         return redirect(url_for("student.exams"))
 
     try:
@@ -726,7 +760,7 @@ def exam_session(session_id: int):
 
     questions = session_questions(session_obj)
     if not questions:
-        flash("Exam paper has no questions configured.", "warning")
+        flash(_t("Exam paper has no questions configured."), "warning")
         return redirect(url_for("student.exams"))
 
     try:
@@ -739,13 +773,13 @@ def exam_session(session_id: int):
         if action == "submit_exam":
             try:
                 submit_session(session_obj)
-                flash("Exam submitted successfully.", "success")
+                flash(_t("Exam submitted successfully."), "success")
             except ExamRuleMissingError as exc:
                 flash(str(exc), "danger")
             return redirect(url_for("student.exam_session", session_id=session_id))
 
         if session_obj.status != "ongoing":
-            flash("Exam session already finished.", "info")
+            flash(_t("Exam session already finished."), "info")
             return redirect(url_for("student.exam_session", session_id=session_id))
 
         selected_option = (request.form.get("selected_option") or "").strip().upper()
@@ -756,13 +790,13 @@ def exam_session(session_id: int):
             question_id_int = 0
 
         if selected_option not in VALID_OPTIONS or not question_id_int:
-            flash("Please choose an answer option before saving.", "warning")
+            flash(_t("Please choose an answer option before saving."), "warning")
         else:
             try:
                 record_answer(session_obj, question_id_int, selected_option)
-                flash("Answer saved.", "success")
+                flash(_t("Answer saved."), "success")
             except ExamQuestionScopeError:
-                flash("Question not part of this exam.", "danger")
+                flash(_t("Question not part of this exam."), "danger")
 
         try:
             navigate_to = int(request.form.get("navigate_to", current_index + 1))
@@ -863,7 +897,7 @@ def practice():
 
         questions = query.all()
         if not questions:
-            flash("No questions available for the selected criteria.", "warning")
+            flash(_t("No questions available for the selected criteria."), "warning")
             return redirect(url_for("student.exams"))
 
         selected = random.sample(questions, min(count, len(questions)))
@@ -874,7 +908,7 @@ def practice():
 
     question_ids: list[int] = session.get("practice_questions", [])
     if not question_ids:
-        flash("Start a practice session from the exam hub.", "info")
+        flash(_t("Start a practice session from the exam hub."), "info")
         return redirect(url_for("student.exams"))
 
     questions = Question.query.filter(Question.id.in_(question_ids)).all()

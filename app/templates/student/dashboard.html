@@ -58,7 +58,7 @@
           <td>{{ appointment.slot.start_time.strftime('%d %b %Y %H:%M') }}</td>
           <td>{{ appointment.slot.coach.name }}</td>
           <td>{{ appointment.slot.location_text }}</td>
-          <td class="text-capitalize">{{ appointment.status.replace('_', ' ') }}</td>
+          <td>{{ entry.status_label }}</td>
           <td class="text-end">
             {% if cancel_mode == 'self_service' %}
             <form method="post" action="{{ url_for('student.cancel_appointment', appointment_id=appointment.id) }}">
