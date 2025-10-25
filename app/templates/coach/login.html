@@ -1,24 +1,49 @@
 {% extends 'base.html' %}
-{% block title %}Coach Login{% endblock %}
+{% block title %}{{ _('Portal Login') }}{% endblock %}
+{% block body_class %}auth-body{% endblock %}
+{% block navbar %}{% endblock %}
+{% block main_class %}auth-container{% endblock %}
 {% block content %}
-<div class="row justify-content-center">
-  <div class="col-md-5">
-    <div class="card shadow-sm">
-      <div class="card-body">
-        <h1 class="h4 mb-3">Coach Login</h1>
-        <form method="post">
-          <div class="mb-3">
-            <label for="email" class="form-label">Email</label>
-            <input type="email" class="form-control" id="email" name="email" required>
-          </div>
-          <div class="mb-3">
-            <label for="password" class="form-label">Password</label>
-            <input type="password" class="form-control" id="password" name="password" required>
-          </div>
-          <button type="submit" class="btn btn-primary w-100">Login</button>
-        </form>
+<div class="auth-panel">
+  <div class="auth-avatar" aria-hidden="true">👤</div>
+  <h1 class="auth-title">{{ _('Login') }}</h1>
+  <form method="post" novalidate>
+    <div class="mb-3">
+      <label class="form-label visually-hidden" for="mobile_number">{{ _('Mobile number') }}</label>
+      <div class="input-group">
+        <span class="input-group-text" aria-hidden="true">📱</span>
+        <input
+          type="tel"
+          class="form-control auth-input"
+          id="mobile_number"
+          name="mobile_number"
+          value="{{ request.form.get('mobile_number', '') }}"
+          placeholder="{{ _('Mobile number') }}"
+          required
+        >
       </div>
     </div>
-  </div>
+    <div class="mb-4">
+      <label class="form-label visually-hidden" for="password">{{ _('Password') }}</label>
+      <div class="input-group">
+        <span class="input-group-text" aria-hidden="true">🔒</span>
+        <input
+          type="password"
+          class="form-control auth-input"
+          id="password"
+          name="password"
+          placeholder="{{ _('Password') }}"
+          required
+        >
+      </div>
+    </div>
+    <div class="auth-actions">
+      <a
+        class="btn btn-outline-secondary auth-register-button"
+        href="{{ url_for('coach.register_student') }}"
+      >{{ _('Register learner account') }}</a>
+      <button type="submit" class="btn btn-primary auth-login-button">{{ _('Sign in') }}</button>
+    </div>
+  </form>
 </div>
 {% endblock %}

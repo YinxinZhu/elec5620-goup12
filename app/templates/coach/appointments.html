@@ -1,38 +1,54 @@
 {% extends 'base.html' %}
-{% block title %}Appointments{% endblock %}
+{% block title %}{{ _('All appointments') if current_user.is_admin else _('Appointments') }}{% endblock %}
 {% block content %}
-<h1 class="h3 mb-4">Appointments</h1>
+<h1 class="h3 mb-4">{{ _('All appointments') if current_user.is_admin else _('Appointments') }}</h1>
 {% if appointments %}
 <div class="table-responsive">
   <table class="table align-middle">
     <thead>
       <tr>
-        <th>Date</th>
-        <th>Duration</th>
-        <th>Location</th>
-        <th>Student</th>
-        <th>Status</th>
-        <th>Actions</th>
+        <th scope="col">{{ _('Date') }}</th>
+        <th scope="col">{{ _('Duration') }}</th>
+        <th scope="col">{{ _('Location') }}</th>
+        <th scope="col">{{ _('Student') }}</th>
+        {% if current_user.is_admin %}
+        <th scope="col">{{ _('Coach') }}</th>
+        {% endif %}
+        <th scope="col">{{ _('Status') }}</th>
+        <th scope="col">{{ _('Actions') }}</th>
       </tr>
     </thead>
     <tbody>
       {% for appointment in appointments %}
       <tr>
         <td>{{ appointment.slot.start_time.strftime('%d %b %Y %H:%M') }}</td>
-        <td>{{ appointment.slot.duration_minutes }} min</td>
+        <td>{{ appointment.slot.duration_minutes }} {{ _('minutes') }}</td>
         <td>{{ appointment.slot.location_text }}</td>
         <td>{{ appointment.student.name }} ({{ appointment.student.email }})</td>
+        {% if current_user.is_admin %}
         <td>
-          <span class="badge bg-{{ 'success' if appointment.status == 'booked' else 'secondary' if appointment.status == 'completed' else 'danger' }}">{{ appointment.status|capitalize }}</span>
+          {% set coach = coach_lookup.get(appointment.slot.coach_id) %}
+          {{ coach.name if coach else _('Unknown') }}
+        </td>
+        {% endif %}
+        <td>
+          {% set badge_lookup = {
+            'booked': 'success',
+            'pending_cancel': 'warning',
+            'completed': 'secondary',
+            'cancelled': 'danger'
+          } %}
+          <span class="badge bg-{{ badge_lookup.get(appointment.status, 'light') }}">{{ _(appointment.status.replace('_', ' ').title()) }}</span>
         </td>
         <td>
           <form method="post" action="{{ url_for('coach.update_appointment_status', appointment_id=appointment.id) }}" class="d-flex gap-2">
             <select class="form-select form-select-sm" name="status">
-              <option value="booked" {% if appointment.status == 'booked' %}selected{% endif %}>Booked</option>
-              <option value="completed" {% if appointment.status == 'completed' %}selected{% endif %}>Completed</option>
-              <option value="cancelled" {% if appointment.status == 'cancelled' %}selected{% endif %}>Cancelled</option>
+              <option value="booked" {% if appointment.status == 'booked' %}selected{% endif %}>{{ _('Booked') }}</option>
+              <option value="pending_cancel" {% if appointment.status == 'pending_cancel' %}selected{% endif %}>{{ _('Pending cancellation') }}</option>
+              <option value="completed" {% if appointment.status == 'completed' %}selected{% endif %}>{{ _('Completed') }}</option>
+              <option value="cancelled" {% if appointment.status == 'cancelled' %}selected{% endif %}>{{ _('Cancelled') }}</option>
             </select>
-            <button class="btn btn-sm btn-outline-primary" type="submit">Update</button>
+            <button class="btn btn-sm btn-outline-primary" type="submit">{{ _('Update') }}</button>
           </form>
         </td>
       </tr>
@@ -41,6 +57,6 @@
   </table>
 </div>
 {% else %}
-<div class="alert alert-info">No appointments yet.</div>
+<div class="alert alert-info">{{ _('No appointments scheduled.') if current_user.is_admin else _('No appointments yet.') }}</div>
 {% endif %}
 {% endblock %}

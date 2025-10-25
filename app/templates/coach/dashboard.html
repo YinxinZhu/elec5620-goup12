@@ -1,52 +1,58 @@
 {% extends 'base.html' %}
-{% block title %}Coach Dashboard{% endblock %}
+{% block title %}{{ _('Coach Dashboard') }}{% endblock %}
 {% block content %}
-<h1 class="h3 mb-4">Welcome back, {{ current_user.name }}!</h1>
+<h1 class="h3 mb-1">{{ _('Coach Dashboard') }}</h1>
+<p class="text-muted mb-4">{{ _('Welcome back, {name}!').format(name=current_user.name) }}</p>
+{% if current_user.is_admin %}
+<div class="alert alert-warning" role="status">
+  <strong>{{ _('Administrator overview:') }}</strong> {{ _('You are viewing aggregated insights across all coaches and students.') }}
+</div>
+{% endif %}
 <div class="row g-3">
   <div class="col-md-4">
     <div class="card border-0 shadow-sm h-100">
       <div class="card-body">
-        <h2 class="h6 text-muted">Assigned Students</h2>
+        <h2 class="h6 text-muted">{{ _('Total Students') if current_user.is_admin else _('Assigned Students') }}</h2>
         <p class="display-6">{{ student_count }}</p>
-        <a href="{{ url_for('coach.students') }}" class="btn btn-outline-primary btn-sm">Manage students</a>
+        <a href="{{ url_for('coach.students') }}" class="btn btn-outline-primary btn-sm">{{ _('Manage students') }}</a>
       </div>
     </div>
   </div>
   <div class="col-md-4">
     <div class="card border-0 shadow-sm h-100">
       <div class="card-body">
-        <h2 class="h6 text-muted">Active Bookings</h2>
+        <h2 class="h6 text-muted">{{ _('Active Bookings (all coaches)') if current_user.is_admin else _('Active Bookings') }}</h2>
         <p class="display-6">{{ pending_bookings }}</p>
-        <a href="{{ url_for('coach.appointments') }}" class="btn btn-outline-primary btn-sm">View appointments</a>
+        <a href="{{ url_for('coach.appointments') }}" class="btn btn-outline-primary btn-sm">{{ _('View appointments') }}</a>
       </div>
     </div>
   </div>
   <div class="col-md-4">
     <div class="card border-0 shadow-sm h-100">
       <div class="card-body">
-        <h2 class="h6 text-muted">Availability</h2>
-        <p class="mb-0">Keep your slots up-to-date for easier booking.</p>
-        <a href="{{ url_for('coach.slots') }}" class="btn btn-outline-primary btn-sm mt-2">Update availability</a>
+        <h2 class="h6 text-muted">{{ _('Upcoming availability (all coaches)') if current_user.is_admin else _('Availability') }}</h2>
+        <p class="mb-0">{{ _('Keep coach schedules up to date for easier booking.') if current_user.is_admin else _('Keep your slots up to date for easier booking.') }}</p>
+        <a href="{{ url_for('coach.slots') }}" class="btn btn-outline-primary btn-sm mt-2">{{ _('Update availability') }}</a>
       </div>
     </div>
   </div>
 </div>
 <div class="mt-5">
-  <h2 class="h5 mb-3">Upcoming availability</h2>
+  <h2 class="h5 mb-3">{{ _('Upcoming availability across coaches') if current_user.is_admin else _('Upcoming availability') }}</h2>
   {% if upcoming_slots %}
   <div class="list-group">
     {% for slot in upcoming_slots %}
     <div class="list-group-item d-flex justify-content-between align-items-center">
       <div>
         <strong>{{ slot.start_time.strftime('%d %b %Y, %H:%M') }}</strong>
-        <div class="text-muted small">{{ slot.duration_minutes }} minutes · {{ slot.location_text }}</div>
+        <div class="text-muted small">{{ slot.duration_minutes }} {{ _('minutes') }} · {{ slot.location_text }}</div>
       </div>
-      <span class="badge bg-{{ 'success' if slot.status == 'available' else 'warning' if slot.status == 'booked' else 'secondary' }}">{{ slot.status|capitalize }}</span>
+      <span class="badge bg-{{ 'success' if slot.status == 'available' else 'warning' if slot.status == 'booked' else 'secondary' }}">{{ _(slot.status.replace('_', ' ').title()) }}</span>
     </div>
     {% endfor %}
   </div>
   {% else %}
-  <div class="alert alert-info">No upcoming slots. Add some in the availability tab.</div>
+  <div class="alert alert-info">{{ _('No upcoming slots. Add some in the availability tab.') }}</div>
   {% endif %}
 </div>
 {% endblock %}

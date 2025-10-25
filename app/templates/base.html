@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="en">
+<html lang="{{ 'zh-Hans' if active_language == 'CHINESE' else 'en' }}">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{% block title %}DriveWise{% endblock %}</title>
+    <title>{% block title %}{{ _('Learner Practice Portal') }}{% endblock %}</title>
     <link
       href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"
       rel="stylesheet"
@@ -12,38 +12,64 @@
     >
     <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
   </head>
-  <body>
+  <body class="{% block body_class %}{% endblock %}">
+    {% block navbar %}
     <nav class="navbar navbar-expand-lg navbar-dark bg-primary mb-4">
       <div class="container-fluid">
-        <a class="navbar-brand" href="{{ url_for('coach.dashboard') }}" aria-label="Dashboard"></a>
+        {% if current_user.is_authenticated %}
+        {% set is_student = current_user.is_student %}
+        {% set home_endpoint = 'student.dashboard' if is_student else 'coach.dashboard' %}
+        {% else %}
+        {% set is_student = False %}
+        {% set home_endpoint = 'coach.login' %}
+        {% endif %}
+        <a class="navbar-brand" href="{{ url_for(home_endpoint) }}" aria-label="{{ _('Dashboard') }}"></a>
         <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
           <span class="navbar-toggler-icon"></span>
         </button>
         <div class="collapse navbar-collapse" id="navbarNav">
           <ul class="navbar-nav me-auto">
             {% if current_user.is_authenticated %}
-            <li class="nav-item"><a class="nav-link" href="{{ url_for('coach.dashboard') }}">Dashboard</a></li>
-            <li class="nav-item"><a class="nav-link" href="{{ url_for('coach.slots') }}">Availability</a></li>
-            <li class="nav-item"><a class="nav-link" href="{{ url_for('coach.appointments') }}">Appointments</a></li>
-            <li class="nav-item"><a class="nav-link" href="{{ url_for('coach.students') }}">Students</a></li>
-            <li class="nav-item"><a class="nav-link" href="{{ url_for('coach.profile') }}">Profile</a></li>
+              {% if is_student %}
+              <li class="nav-item"><a class="nav-link" href="{{ url_for('student.dashboard') }}">{{ _('Dashboard') }}</a></li>
+              <li class="nav-item"><a class="nav-link" href="{{ url_for('student.exams') }}">{{ _('Exam centre') }}</a></li>
+              <li class="nav-item"><a class="nav-link" href="{{ url_for('student.progress') }}">{{ _('Progress') }}</a></li>
+              <li class="nav-item"><a class="nav-link" href="{{ url_for('student.notebook') }}">{{ _('Notebook') }}</a></li>
+              <li class="nav-item"><a class="nav-link" href="{{ url_for('student.profile') }}">{{ _('Profile') }}</a></li>
+              {% else %}
+              <li class="nav-item"><a class="nav-link" href="{{ url_for('coach.dashboard') }}">{{ _('Dashboard') }}</a></li>
+              <li class="nav-item"><a class="nav-link" href="{{ url_for('coach.slots') }}">{{ _('Availability') }}</a></li>
+              <li class="nav-item"><a class="nav-link" href="{{ url_for('coach.appointments') }}">{{ _('Appointments') }}</a></li>
+              <li class="nav-item"><a class="nav-link" href="{{ url_for('coach.students') }}">{{ _('Students') }}</a></li>
+              <li class="nav-item"><a class="nav-link" href="{{ url_for('coach.exams') }}">{{ _('Exams') }}</a></li>
+              {% if current_user.is_admin %}
+              <li class="nav-item"><a class="nav-link" href="{{ url_for('coach.personnel') }}">{{ _('Personnel') }}</a></li>
+              {% endif %}
+              <li class="nav-item"><a class="nav-link" href="{{ url_for('coach.profile') }}">{{ _('Profile') }}</a></li>
+              {% endif %}
             {% endif %}
           </ul>
-          <ul class="navbar-nav">
+          <ul class="navbar-nav ms-auto align-items-center gap-3">
             {% if current_user.is_authenticated %}
-            <li class="nav-item"><span class="navbar-text">Hi, {{ current_user.name }}</span></li>
-            <li class="nav-item"><a class="nav-link" href="{{ url_for('coach.logout') }}">Logout</a></li>
+            <li class="nav-item d-flex align-items-center gap-2">
+              <span class="navbar-text">{{ _('Hi') }}, {{ current_user.name }}</span>
+              {% if not is_student and current_user.is_admin %}
+              <span class="badge bg-warning text-dark">{{ _('Admin') }}</span>
+              {% endif %}
+            </li>
+            <li class="nav-item"><a class="nav-link" href="{{ url_for('coach.logout') }}">{{ _('Logout') }}</a></li>
             {% endif %}
           </ul>
         </div>
       </div>
     </nav>
-    <main class="container">
+    {% endblock %}
+    <main class="{% block main_class %}container{% endblock %}">
       {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
           <div class="mb-3">
             {% for category, message in messages %}
-              <div class="alert alert-{{ category }}" role="alert">{{ message }}</div>
+              <div class="alert alert-{{ category }}" role="alert">{{ _(message) }}</div>
             {% endfor %}
           </div>
         {% endif %}

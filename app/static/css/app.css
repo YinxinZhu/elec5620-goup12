@@ -14,3 +14,253 @@ body {
   background-color: #f1f3f5;
   border-bottom: 0;
 }
+
+.auth-body {
+  background: linear-gradient(135deg, rgba(60, 120, 180, 0.85), rgba(39, 64, 98, 0.95)),
+    url("https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=1600&q=80")
+      center/cover no-repeat fixed;
+  color: #0f172a;
+}
+
+.auth-container {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem 1rem;
+}
+
+.auth-container .alert {
+  width: 100%;
+  max-width: 420px;
+}
+
+.auth-panel {
+  width: 100%;
+  max-width: 420px;
+  background-color: rgba(255, 255, 255, 0.92);
+  border-radius: 1.25rem;
+  padding: 2.5rem 3rem;
+  box-shadow: 0 1.75rem 3rem -1.5rem rgba(15, 23, 42, 0.6);
+  backdrop-filter: blur(8px);
+}
+
+.auth-avatar {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #4f6d7a, #c0d6df);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 2rem;
+  margin: 0 auto 1.5rem;
+}
+
+.auth-title {
+  font-weight: 600;
+  text-align: center;
+  margin-bottom: 1.5rem;
+  font-size: 1.75rem;
+}
+
+.auth-input {
+  padding: 0.75rem 1rem;
+  border-radius: 999px;
+}
+
+.auth-panel .input-group-text {
+  border-radius: 999px 0 0 999px;
+  border-right: 0;
+  background: transparent;
+  color: #4f6d7a;
+  padding-left: 1rem;
+  font-size: 1.1rem;
+}
+
+.auth-panel .form-control.auth-input {
+  border-radius: 0 999px 999px 0;
+  border-left: 0;
+  padding-left: 0.25rem;
+}
+
+.auth-panel .form-control.auth-input:focus {
+  box-shadow: none;
+}
+
+.auth-panel .input-group:focus-within .form-control.auth-input {
+  box-shadow: 0 0 0 0.25rem rgba(79, 109, 122, 0.25);
+}
+
+.auth-panel .input-group:focus-within .input-group-text {
+  border-color: #86b1d9;
+  color: #2c5282;
+}
+
+.auth-actions {
+  display: flex;
+  align-items: stretch;
+  gap: 1rem;
+  margin-top: 1.5rem;
+}
+
+.auth-actions .btn {
+  flex: 1 1 0;
+  border-radius: 0.75rem;
+  padding: 0.75rem 1rem;
+  font-weight: 600;
+}
+
+.auth-register-button {
+  color: #1f2937;
+  border-color: #d1d5db;
+  background-color: rgba(255, 255, 255, 0.8);
+}
+
+.auth-register-button:hover,
+.auth-register-button:focus {
+  color: #111827;
+  background-color: #e5e7eb;
+  border-color: #cbd5f5;
+}
+
+.auth-login-button {
+  border-radius: 0.75rem;
+  padding: 0.75rem 1rem;
+  font-weight: 600;
+}
+
+.auth-modal .modal-content {
+  border-radius: 1rem;
+}
+
+.auth-modal .modal-header {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.auth-modal .modal-body {
+  padding-top: 0;
+}
+
+.exam-centre .exam-paper-card {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.exam-centre .exam-paper-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 1.5rem 2.5rem -1.5rem rgba(15, 23, 42, 0.45);
+}
+
+.practice-form .form-text {
+  font-size: 0.85rem;
+}
+
+.exam-session-layout .timer-display {
+  background: #0d6efd10;
+  border-radius: 999px;
+  padding: 0.5rem 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-weight: 600;
+}
+
+.exam-session-layout .timer-display .label {
+  text-transform: uppercase;
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  color: #0d6efd;
+}
+
+.exam-session-layout .question-form .list-group-item {
+  border-radius: 0.75rem;
+  margin-bottom: 0.75rem;
+  border: 1px solid #e2e8f0;
+}
+
+.exam-session-layout .question-form .list-group-item:hover {
+  border-color: #0d6efd;
+}
+
+.options-list li.correct {
+  background-color: #edf7ed;
+  border-radius: 0.5rem;
+  padding: 0.35rem 0.5rem;
+}
+
+.practice-session .accordion-button {
+  font-weight: 600;
+}
+
+.practice-session .accordion-button:not(.collapsed) {
+  color: #0d6efd;
+  background-color: rgba(13, 110, 253, 0.08);
+}
+
+.practice-session .accordion-body {
+  background-color: #f8fafc;
+  border-radius: 0 0 1rem 1rem;
+}
+
+.exam-centre .exam-paper-card {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.exam-centre .exam-paper-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 1.5rem 2.5rem -1.5rem rgba(15, 23, 42, 0.45);
+}
+
+.practice-form .form-text {
+  font-size: 0.85rem;
+}
+
+.exam-session-layout .timer-display {
+  background: #0d6efd10;
+  border-radius: 999px;
+  padding: 0.5rem 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-weight: 600;
+}
+
+.exam-session-layout .timer-display .label {
+  text-transform: uppercase;
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  color: #0d6efd;
+}
+
+.exam-session-layout .question-form .list-group-item {
+  border-radius: 0.75rem;
+  margin-bottom: 0.75rem;
+  border: 1px solid #e2e8f0;
+}
+
+.exam-session-layout .question-form .list-group-item:hover {
+  border-color: #0d6efd;
+}
+
+.options-list li.correct {
+  background-color: #edf7ed;
+  border-radius: 0.5rem;
+  padding: 0.35rem 0.5rem;
+}
+
+.practice-session .accordion-button {
+  font-weight: 600;
+}
+
+.practice-session .accordion-button:not(.collapsed) {
+  color: #0d6efd;
+  background-color: rgba(13, 110, 253, 0.08);
+}
+
+.practice-session .accordion-body {
+  background-color: #f8fafc;
+  border-radius: 0 0 1rem 1rem;
+}
