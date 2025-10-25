@@ -1,4 +1,5 @@
-# Learner Practice Portal (Unified Web Experience)
+# NSW DKT Learning Assistant
+## Learner Practice Portal (Unified Web Experience)
 
 This repository powers the unified administrator, coach, and learner web
 experience for a driver training platform. It is built with Flask, SQLAlchemy,

@@ -24,10 +24,9 @@ venv.bak/
 # -----------------------------------------------------------------------------
 # Flask instance folder (contains secrets, configs, uploads, DBs)
 # -----------------------------------------------------------------------------
-instance/
-*.db
-*.sqlite
-*.sqlite3
+# Ignore everything under instance, except demo database
+instance/*
+!instance/app.db
 
 # -----------------------------------------------------------------------------
 # IDE / Editor
