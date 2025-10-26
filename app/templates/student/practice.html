@@ -26,6 +26,21 @@
       </h2>
       <div id="collapse{{ loop.index }}" class="accordion-collapse collapse {% if loop.first %}show{% endif %}" aria-labelledby="heading{{ loop.index }}" data-bs-parent="#practiceAccordion">
         <div class="accordion-body">
+          <div class="d-flex justify-content-between align-items-start mb-3">
+            <div>
+              <p class="text-muted small mb-1">{{ _('Topic') }}: {{ question.topic }}</p>
+            </div>
+            <form method="post" action="{{ url_for('student.toggle_star', question_id=question.id) }}">
+              <input type="hidden" name="next" value="{{ request.full_path or request.path }}">
+              {% if question.id in starred_ids %}
+              <input type="hidden" name="action" value="unstar">
+              <button type="submit" class="btn btn-sm btn-warning">⭐ {{ _('Remove from notebook') }}</button>
+              {% else %}
+              <input type="hidden" name="action" value="star">
+              <button type="submit" class="btn btn-sm btn-outline-warning">☆ {{ _('Add to notebook') }}</button>
+              {% endif %}
+            </form>
+          </div>
           <ul class="list-unstyled mb-3 options-list">
             <li {% if question.correct_option == 'A' %}class="correct"{% endif %}><strong>A.</strong> {{ question.option_a }}</li>
             <li {% if question.correct_option == 'B' %}class="correct"{% endif %}><strong>B.</strong> {{ question.option_b }}</li>
