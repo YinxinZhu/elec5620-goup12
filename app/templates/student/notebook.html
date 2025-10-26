@@ -29,43 +29,287 @@
     <div class="card-body">
       <h2 class="h5 mb-3">{{ _('Overview') }}</h2>
       {% if entries %}
-      <p class="text-muted mb-0">{{ _('You have logged %(count)s wrong attempts in this state.', count=total_wrong) }}</p>
+      <p class="text-muted mb-1">{{ _('You have logged %(count)s wrong attempts in this state.', count=total_wrong) }}</p>
       {% else %}
-      <p class="text-muted mb-0">{{ _('No wrong answers recorded for this state yet.') }}</p>
+      <p class="text-muted mb-1">{{ _('No wrong answers recorded for this state yet.') }}</p>
+      {% endif %}
+      <p class="text-muted mb-0">{{ _('Starred questions saved') }}: {{ starred_entries|length }}</p>
+    </div>
+  </div>
+
+  <div class="card mb-4">
+    <div class="card-body">
+      <h2 class="h5 mb-3">{{ _('Wrong answers') }}</h2>
+      {% if entries %}
+      <div class="notebook-section" data-notebook-section="wrong">
+        <div class="row g-3 g-lg-4 align-items-start">
+          <div class="col-lg-4 notebook-list-wrapper">
+            <div class="list-group" role="list" aria-label="{{ _('Wrong answers') }}">
+              {% for entry in entries %}
+              <button
+                type="button"
+                class="list-group-item list-group-item-action notebook-list-item {% if loop.first %}active{% endif %}"
+                data-index="{{ loop.index0 }}"
+                data-section="wrong"
+              >
+                <div class="fw-semibold text-start">{{ entry.question.qid }} · {{ entry.question.prompt|striptags|truncate(80) }}</div>
+                <small class="text-muted d-block">{{ _('Topic') }}: {{ entry.question.topic }}</small>
+                <small class="text-muted d-block">{{ _('Wrong attempts') }}: {{ entry.wrong_count }}</small>
+              </button>
+              {% endfor %}
+            </div>
+          </div>
+          <div class="col-lg-8 notebook-detail-container">
+            {% for entry in entries %}
+            <div class="card shadow-sm notebook-detail {% if not loop.first %}d-none{% endif %}" data-section="wrong" data-index="{{ loop.index0 }}">
+              <div class="card-body">
+                <div class="d-flex flex-column flex-md-row justify-content-between gap-3 mb-3">
+                  <div>
+                    <p class="text-muted small mb-1">{{ _('Question') }} {{ loop.index }} / {{ entries|length }}</p>
+                    <h3 class="h5 mb-2">{{ entry.question.qid }}</h3>
+                    <div class="mb-2 question-prompt">{{ entry.question.prompt|safe }}</div>
+                    <p class="text-muted small mb-0">{{ _('Topic') }}: {{ entry.question.topic }}</p>
+                    <p class="text-muted small mb-0">
+                      {{ _('Wrong attempts') }}: {{ entry.wrong_count }} · {{ _('Last wrong at') }}:
+                      {{ entry.last_wrong_at.strftime('%Y-%m-%d %H:%M') if entry.last_wrong_at else _('Never') }}
+                    </p>
+                  </div>
+                  <div class="d-flex flex-wrap gap-2 justify-content-end">
+                    <button type="button" class="btn btn-outline-secondary" data-action="list" data-section="wrong">{{ _('Return to list') }}</button>
+                    <form method="post" action="{{ url_for('student.remove_notebook_entry', question_id=entry.question.id) }}">
+                      <input type="hidden" name="state" value="{{ entry.state }}">
+                      <input type="hidden" name="next" value="{{ request.full_path or request.path }}">
+                      <button type="submit" class="btn btn-outline-danger">{{ _('Remove from notebook') }}</button>
+                    </form>
+                  </div>
+                </div>
+                <ul class="list-unstyled mb-3 options-list">
+                  <li {% if entry.question.correct_option == 'A' %}class="correct"{% endif %}><strong>A.</strong> {{ entry.question.option_a }}</li>
+                  <li {% if entry.question.correct_option == 'B' %}class="correct"{% endif %}><strong>B.</strong> {{ entry.question.option_b }}</li>
+                  <li {% if entry.question.correct_option == 'C' %}class="correct"{% endif %}><strong>C.</strong> {{ entry.question.option_c }}</li>
+                  <li {% if entry.question.correct_option == 'D' %}class="correct"{% endif %}><strong>D.</strong> {{ entry.question.option_d }}</li>
+                </ul>
+                <div class="alert alert-info py-2 mb-3">{{ _('Correct answer') }}: {{ entry.question.correct_option }}</div>
+                {% if entry.question.explanation %}
+                <p class="text-muted small mb-4">{{ _('Explanation') }}: {{ entry.question.explanation }}</p>
+                {% endif %}
+                <div class="d-flex flex-wrap gap-2">
+                  <button type="button" class="btn btn-outline-secondary" data-action="prev" data-section="wrong">{{ _('Previous question') }}</button>
+                  <button type="button" class="btn btn-outline-primary" data-action="next" data-section="wrong">{{ _('Next question') }}</button>
+                </div>
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+      {% else %}
+      <div class="alert alert-success mb-0">{{ _('No wrong answers recorded for this state yet.') }}</div>
       {% endif %}
     </div>
   </div>
 
-  {% if entries %}
   <div class="card">
     <div class="card-body">
-      <h2 class="h5 mb-3">{{ _('Wrong answer list') }}</h2>
-      <div class="table-responsive">
-        <table class="table table-striped align-middle">
-          <thead>
-            <tr>
-              <th scope="col">{{ _('Question ID') }}</th>
-              <th scope="col">{{ _('Topic') }}</th>
-              <th scope="col">{{ _('Attempts') }}</th>
-              <th scope="col">{{ _('Last wrong at') }}</th>
-              <th scope="col">{{ _('Prompt excerpt') }}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for entry in entries %}
-            <tr>
-              <td>{{ entry.question.qid }}</td>
-              <td>{{ entry.question.topic }}</td>
-              <td>{{ entry.wrong_count }}</td>
-              <td>{{ entry.last_wrong_at.strftime('%Y-%m-%d %H:%M') if entry.last_wrong_at else _('Never') }}</td>
-              <td class="text-truncate" style="max-width: 380px;">{{ entry.question.prompt|striptags|truncate(160) }}</td>
-            </tr>
+      <h2 class="h5 mb-3">{{ _('Starred questions') }}</h2>
+      {% if starred_entries %}
+      <div class="notebook-section" data-notebook-section="starred">
+        <div class="row g-3 g-lg-4 align-items-start">
+          <div class="col-lg-4 notebook-list-wrapper">
+            <div class="list-group" role="list" aria-label="{{ _('Starred questions') }}">
+              {% for entry in starred_entries %}
+              <button
+                type="button"
+                class="list-group-item list-group-item-action notebook-list-item {% if loop.first %}active{% endif %}"
+                data-index="{{ loop.index0 }}"
+                data-section="starred"
+              >
+                <div class="fw-semibold text-start">{{ entry.question.qid }} · {{ entry.question.prompt|striptags|truncate(80) }}</div>
+                <small class="text-muted d-block">{{ _('Topic') }}: {{ entry.question.topic }}</small>
+                <small class="text-muted d-block">{{ _('Starred at') }}: {{ entry.created_at.strftime('%Y-%m-%d %H:%M') }}</small>
+              </button>
+              {% endfor %}
+            </div>
+          </div>
+          <div class="col-lg-8 notebook-detail-container">
+            {% for entry in starred_entries %}
+            <div class="card shadow-sm notebook-detail {% if not loop.first %}d-none{% endif %}" data-section="starred" data-index="{{ loop.index0 }}">
+              <div class="card-body">
+                <div class="d-flex flex-column flex-md-row justify-content-between gap-3 mb-3">
+                  <div>
+                    <p class="text-muted small mb-1">{{ _('Question') }} {{ loop.index }} / {{ starred_entries|length }}</p>
+                    <h3 class="h5 mb-2">{{ entry.question.qid }}</h3>
+                    <div class="mb-2 question-prompt">{{ entry.question.prompt|safe }}</div>
+                    <p class="text-muted small mb-0">{{ _('Topic') }}: {{ entry.question.topic }}</p>
+                    <p class="text-muted small mb-0">{{ _('Starred at') }}: {{ entry.created_at.strftime('%Y-%m-%d %H:%M') }}</p>
+                  </div>
+                  <div class="d-flex flex-wrap gap-2 justify-content-end">
+                    <button type="button" class="btn btn-outline-secondary" data-action="list" data-section="starred">{{ _('Return to list') }}</button>
+                    <form method="post" action="{{ url_for('student.toggle_star', question_id=entry.question.id) }}">
+                      <input type="hidden" name="action" value="unstar">
+                      <input type="hidden" name="next" value="{{ request.full_path or request.path }}">
+                      <button type="submit" class="btn btn-warning">⭐ {{ _('Remove from notebook') }}</button>
+                    </form>
+                  </div>
+                </div>
+                <ul class="list-unstyled mb-3 options-list">
+                  <li {% if entry.question.correct_option == 'A' %}class="correct"{% endif %}><strong>A.</strong> {{ entry.question.option_a }}</li>
+                  <li {% if entry.question.correct_option == 'B' %}class="correct"{% endif %}><strong>B.</strong> {{ entry.question.option_b }}</li>
+                  <li {% if entry.question.correct_option == 'C' %}class="correct"{% endif %}><strong>C.</strong> {{ entry.question.option_c }}</li>
+                  <li {% if entry.question.correct_option == 'D' %}class="correct"{% endif %}><strong>D.</strong> {{ entry.question.option_d }}</li>
+                </ul>
+                <div class="alert alert-info py-2 mb-3">{{ _('Correct answer') }}: {{ entry.question.correct_option }}</div>
+                {% if entry.question.explanation %}
+                <p class="text-muted small mb-4">{{ _('Explanation') }}: {{ entry.question.explanation }}</p>
+                {% endif %}
+                <div class="d-flex flex-wrap gap-2">
+                  <button type="button" class="btn btn-outline-secondary" data-action="prev" data-section="starred">{{ _('Previous question') }}</button>
+                  <button type="button" class="btn btn-outline-primary" data-action="next" data-section="starred">{{ _('Next question') }}</button>
+                </div>
+              </div>
+            </div>
             {% endfor %}
-          </tbody>
-        </table>
+          </div>
+        </div>
       </div>
+      {% else %}
+      <div class="alert alert-info mb-0">{{ _('No starred questions yet.') }}</div>
+      {% endif %}
     </div>
   </div>
-  {% endif %}
+  <style>
+    .notebook-section .list-group-item {
+      cursor: pointer;
+    }
+
+    .notebook-section .list-group-item.active {
+      background-color: #0d6efd;
+      border-color: #0d6efd;
+      color: #fff;
+    }
+
+    .notebook-section .options-list li.correct {
+      background-color: rgba(25, 135, 84, 0.1);
+      border-radius: 0.5rem;
+      padding: 0.5rem 0.75rem;
+    }
+
+    .notebook-section .question-prompt > :last-child {
+      margin-bottom: 0;
+    }
+
+    @media (max-width: 991.98px) {
+      .notebook-section .notebook-detail-container {
+        display: none;
+      }
+
+      .notebook-section.showing-detail .notebook-list-wrapper {
+        display: none;
+      }
+
+      .notebook-section.showing-detail .notebook-detail-container {
+        display: block;
+      }
+    }
+  </style>
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      document.querySelectorAll('[data-notebook-section]').forEach(function (section) {
+        var listItems = Array.prototype.slice.call(section.querySelectorAll('.notebook-list-item'));
+        var details = Array.prototype.slice.call(section.querySelectorAll('.notebook-detail'));
+        if (!listItems.length || !details.length) {
+          return;
+        }
+
+        function updateNavigationState(activeIndex) {
+          section.dataset.activeIndex = String(activeIndex);
+          section.querySelectorAll('[data-action="prev"]').forEach(function (button) {
+            button.disabled = activeIndex <= 0;
+          });
+          section.querySelectorAll('[data-action="next"]').forEach(function (button) {
+            button.disabled = activeIndex >= details.length - 1;
+          });
+        }
+
+        function showIndex(targetIndex) {
+          if (targetIndex < 0 || targetIndex >= details.length) {
+            return;
+          }
+          listItems.forEach(function (item) {
+            item.classList.toggle('active', Number(item.dataset.index) === targetIndex);
+          });
+          details.forEach(function (detail) {
+            detail.classList.toggle('d-none', Number(detail.dataset.index) !== targetIndex);
+          });
+          section.classList.add('showing-detail');
+          updateNavigationState(targetIndex);
+          if (window.innerWidth < 992) {
+            var detailElement = section.querySelector('.notebook-detail[data-index="' + targetIndex + '"]');
+            if (detailElement) {
+              detailElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+          }
+        }
+
+        var initialActive = listItems.find(function (item) {
+          return item.classList.contains('active');
+        });
+        if (initialActive && window.innerWidth >= 992) {
+          showIndex(Number(initialActive.dataset.index));
+        } else {
+          section.classList.remove('showing-detail');
+          details.forEach(function (detail) {
+            detail.classList.add('d-none');
+          });
+          listItems.forEach(function (item) {
+            item.classList.remove('active');
+          });
+        }
+
+        listItems.forEach(function (item) {
+          item.addEventListener('click', function () {
+            showIndex(Number(item.dataset.index));
+          });
+        });
+
+        section.querySelectorAll('[data-action="prev"]').forEach(function (button) {
+          button.addEventListener('click', function () {
+            var current = Number(section.dataset.activeIndex || '0');
+            showIndex(current - 1);
+          });
+        });
+
+        section.querySelectorAll('[data-action="next"]').forEach(function (button) {
+          button.addEventListener('click', function () {
+            var current = Number(section.dataset.activeIndex || '0');
+            showIndex(current + 1);
+          });
+        });
+
+        section.querySelectorAll('[data-action="list"]').forEach(function (button) {
+          button.addEventListener('click', function () {
+            section.classList.remove('showing-detail');
+            section.dataset.activeIndex = '';
+            details.forEach(function (detail) {
+              detail.classList.add('d-none');
+            });
+            listItems.forEach(function (item) {
+              item.classList.remove('active');
+            });
+            section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          });
+        });
+
+        window.addEventListener('resize', function () {
+          if (window.innerWidth >= 992 && !section.dataset.activeIndex) {
+            var firstItem = listItems[0];
+            if (firstItem) {
+              showIndex(Number(firstItem.dataset.index));
+            }
+          }
+        });
+      });
+    });
+  </script>
 {% endif %}
 {% endblock %}
