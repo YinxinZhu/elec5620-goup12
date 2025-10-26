@@ -22,6 +22,7 @@ from ..models import (
     MockExamSummary,
     NotebookEntry,
     Question,
+    StarredQuestion,
     Student,
     StudentExamSession,
     StudentStateProgress,
@@ -105,6 +106,19 @@ def _current_exam_session(student: Student) -> StudentExamSession | None:
     if session_obj.status != "ongoing":
         return None
     return session_obj
+
+
+def _starred_question_ids(student: Student, question_ids: set[int] | None = None) -> set[int]:
+    if question_ids is not None and not question_ids:
+        return set()
+
+    query = StarredQuestion.query.with_entities(StarredQuestion.question_id).filter_by(
+        student_id=student.id
+    )
+    if question_ids is not None:
+        query = query.filter(StarredQuestion.question_id.in_(question_ids))
+
+    return {row[0] for row in query.all()}
 
 
 @student_bp.route("/dashboard")
@@ -588,6 +602,7 @@ def notebook():
 
     entries = []
     total_wrong = 0
+    starred_entries: list[StarredQuestion] = []
     if selected_state:
         notebook_query = (
             NotebookEntry.query.filter_by(student_id=student.id, state=selected_state)
@@ -597,12 +612,24 @@ def notebook():
         entries = notebook_query.all()
         total_wrong = sum(entry.wrong_count for entry in entries)
 
+        starred_query = (
+            StarredQuestion.query.filter_by(student_id=student.id)
+            .join(StarredQuestion.question)
+            .filter(
+                (Question.state_scope == "ALL")
+                | (Question.state_scope == selected_state)
+            )
+            .order_by(StarredQuestion.created_at.desc())
+        )
+        starred_entries = starred_query.all()
+
     return render_template(
         "student/notebook.html",
         available_states=available_states,
         selected_state=selected_state,
         entries=entries,
         total_wrong=total_wrong,
+        starred_entries=starred_entries,
     )
 
 
@@ -763,6 +790,10 @@ def exam_session(session_id: int):
         flash(_t("Exam paper has no questions configured."), "warning")
         return redirect(url_for("student.exams"))
 
+    starred_ids = _starred_question_ids(
+        student, {item.question.id for item in questions}
+    )
+
     try:
         requested_index = int(request.args.get("q", "1")) - 1
     except ValueError:
@@ -871,6 +902,7 @@ def exam_session(session_id: int):
         review_total_pages=review_total_pages,
         incorrect_count=incorrect_count,
         incorrect_only=incorrect_only,
+        starred_ids=starred_ids,
     )
 
 
@@ -914,10 +946,86 @@ def practice():
     questions = Question.query.filter(Question.id.in_(question_ids)).all()
     lookup = {question.id: question for question in questions}
     ordered_questions = [lookup[qid] for qid in question_ids if qid in lookup]
+    starred_ids = _starred_question_ids(student, set(lookup.keys()))
 
     return render_template(
         "student/practice.html",
         questions=ordered_questions,
         practice_topic=session.get("practice_topic"),
         state=student.state,
+        starred_ids=starred_ids,
     )
+
+
+@student_bp.post("/questions/<int:question_id>/star")
+@login_required
+def toggle_star(question_id: int):
+    student = _current_student()
+    if not student:
+        return _redirect_non_students()
+
+    action = (request.form.get("action") or "star").strip().lower()
+    next_target = (request.form.get("next") or "").strip()
+    if not next_target.startswith("/"):
+        next_target = url_for("student.notebook")
+
+    question = Question.query.filter_by(id=question_id).first()
+    if not question:
+        flash(_t("Question not found."), "warning")
+        return redirect(next_target)
+
+    if question.state_scope not in {"ALL", student.state}:
+        flash(_t("Question not available for your state."), "warning")
+        return redirect(next_target)
+
+    entry = StarredQuestion.query.filter_by(
+        student_id=student.id, question_id=question.id
+    ).first()
+
+    if action == "star":
+        if not entry:
+            db.session.add(StarredQuestion(student_id=student.id, question_id=question.id))
+            db.session.commit()
+            flash(_t("Question added to your notebook."), "success")
+        else:
+            flash(_t("This question is already in your notebook."), "info")
+        return redirect(next_target)
+
+    if entry:
+        db.session.delete(entry)
+        db.session.commit()
+        flash(_t("Question removed from your notebook."), "info")
+    else:
+        flash(_t("Question is not in your notebook."), "info")
+
+    return redirect(next_target)
+
+
+@student_bp.post("/notebook/<int:question_id>/remove")
+@login_required
+def remove_notebook_entry(question_id: int):
+    student = _current_student()
+    if not student:
+        return _redirect_non_students()
+
+    state = (request.form.get("state") or student.state or "").strip().upper()
+    next_target = (request.form.get("next") or "").strip()
+    default_args: dict[str, str] = {}
+    if state:
+        default_args["state"] = state
+    if not next_target.startswith("/"):
+        next_target = url_for("student.notebook", **default_args)
+
+    query = NotebookEntry.query.filter_by(student_id=student.id, question_id=question_id)
+    if state:
+        query = query.filter_by(state=state)
+    entry = query.first()
+
+    if not entry:
+        flash(_t("Notebook entry not found."), "warning")
+        return redirect(next_target)
+
+    db.session.delete(entry)
+    db.session.commit()
+    flash(_t("Notebook entry removed."), "success")
+    return redirect(next_target)

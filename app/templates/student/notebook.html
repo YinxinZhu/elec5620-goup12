@@ -29,43 +29,125 @@
     <div class="card-body">
       <h2 class="h5 mb-3">{{ _('Overview') }}</h2>
       {% if entries %}
-      <p class="text-muted mb-0">{{ _('You have logged %(count)s wrong attempts in this state.', count=total_wrong) }}</p>
+      <p class="text-muted mb-1">{{ _('You have logged %(count)s wrong attempts in this state.', count=total_wrong) }}</p>
       {% else %}
-      <p class="text-muted mb-0">{{ _('No wrong answers recorded for this state yet.') }}</p>
+      <p class="text-muted mb-1">{{ _('No wrong answers recorded for this state yet.') }}</p>
       {% endif %}
+      <p class="text-muted mb-0">{{ _('Starred questions saved') }}: {{ starred_entries|length }}</p>
     </div>
   </div>
 
-  {% if entries %}
-  <div class="card">
-    <div class="card-body">
-      <h2 class="h5 mb-3">{{ _('Wrong answer list') }}</h2>
-      <div class="table-responsive">
-        <table class="table table-striped align-middle">
-          <thead>
-            <tr>
-              <th scope="col">{{ _('Question ID') }}</th>
-              <th scope="col">{{ _('Topic') }}</th>
-              <th scope="col">{{ _('Attempts') }}</th>
-              <th scope="col">{{ _('Last wrong at') }}</th>
-              <th scope="col">{{ _('Prompt excerpt') }}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for entry in entries %}
-            <tr>
-              <td>{{ entry.question.qid }}</td>
-              <td>{{ entry.question.topic }}</td>
-              <td>{{ entry.wrong_count }}</td>
-              <td>{{ entry.last_wrong_at.strftime('%Y-%m-%d %H:%M') if entry.last_wrong_at else _('Never') }}</td>
-              <td class="text-truncate" style="max-width: 380px;">{{ entry.question.prompt|striptags|truncate(160) }}</td>
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
+  <div class="row g-4">
+    <div class="col-12">
+      <h2 class="h5 mb-3">{{ _('Wrong answers') }}</h2>
+      {% if entries %}
+      <div class="accordion" id="wrongNotebook">
+        {% for entry in entries %}
+        <div class="accordion-item">
+          <h2 class="accordion-header" id="wrongHeading{{ loop.index }}">
+            <button
+              class="accordion-button {% if not loop.first %}collapsed{% endif %}"
+              type="button"
+              data-bs-toggle="collapse"
+              data-bs-target="#wrongCollapse{{ loop.index }}"
+              aria-expanded="{{ 'true' if loop.first else 'false' }}"
+              aria-controls="wrongCollapse{{ loop.index }}"
+            >
+              {{ entry.question.qid }} · {{ entry.question.prompt|striptags|truncate(120) }}
+            </button>
+          </h2>
+          <div
+            id="wrongCollapse{{ loop.index }}"
+            class="accordion-collapse collapse {% if loop.first %}show{% endif %}"
+            aria-labelledby="wrongHeading{{ loop.index }}"
+            data-bs-parent="#wrongNotebook"
+          >
+            <div class="accordion-body">
+              <p class="text-muted small mb-2">{{ _('Topic') }}: {{ entry.question.topic }}</p>
+              <p class="text-muted small mb-3">
+                {{ _('Wrong attempts') }}: {{ entry.wrong_count }} · {{ _('Last wrong at') }}:
+                {{ entry.last_wrong_at.strftime('%Y-%m-%d %H:%M') if entry.last_wrong_at else _('Never') }}
+              </p>
+              <ul class="list-unstyled mb-3 options-list">
+                <li {% if entry.question.correct_option == 'A' %}class="correct"{% endif %}><strong>A.</strong> {{ entry.question.option_a }}</li>
+                <li {% if entry.question.correct_option == 'B' %}class="correct"{% endif %}><strong>B.</strong> {{ entry.question.option_b }}</li>
+                <li {% if entry.question.correct_option == 'C' %}class="correct"{% endif %}><strong>C.</strong> {{ entry.question.option_c }}</li>
+                <li {% if entry.question.correct_option == 'D' %}class="correct"{% endif %}><strong>D.</strong> {{ entry.question.option_d }}</li>
+              </ul>
+              <div class="alert alert-info py-2 mb-3">{{ _('Correct answer') }}: {{ entry.question.correct_option }}</div>
+              {% if entry.question.explanation %}
+              <p class="text-muted small mb-3">{{ _('Explanation') }}: {{ entry.question.explanation }}</p>
+              {% endif %}
+              <div class="d-flex justify-content-end">
+                <form method="post" action="{{ url_for('student.remove_notebook_entry', question_id=entry.question.id) }}">
+                  <input type="hidden" name="state" value="{{ entry.state }}">
+                  <input type="hidden" name="next" value="{{ request.full_path or request.path }}">
+                  <button type="submit" class="btn btn-sm btn-outline-danger">{{ _('Remove from notebook') }}</button>
+                </form>
+              </div>
+            </div>
+          </div>
+        </div>
+        {% endfor %}
       </div>
+      {% else %}
+      <div class="alert alert-success mb-0">{{ _('No wrong answers recorded for this state yet.') }}</div>
+      {% endif %}
+    </div>
+
+    <div class="col-12">
+      <h2 class="h5 mb-3">{{ _('Starred questions') }}</h2>
+      {% if starred_entries %}
+      <div class="accordion" id="starredNotebook">
+        {% for entry in starred_entries %}
+        <div class="accordion-item">
+          <h2 class="accordion-header" id="starHeading{{ loop.index }}">
+            <button
+              class="accordion-button {% if not loop.first %}collapsed{% endif %}"
+              type="button"
+              data-bs-toggle="collapse"
+              data-bs-target="#starCollapse{{ loop.index }}"
+              aria-expanded="{{ 'true' if loop.first else 'false' }}"
+              aria-controls="starCollapse{{ loop.index }}"
+            >
+              {{ entry.question.qid }} · {{ entry.question.prompt|striptags|truncate(120) }}
+            </button>
+          </h2>
+          <div
+            id="starCollapse{{ loop.index }}"
+            class="accordion-collapse collapse {% if loop.first %}show{% endif %}"
+            aria-labelledby="starHeading{{ loop.index }}"
+            data-bs-parent="#starredNotebook"
+          >
+            <div class="accordion-body">
+              <p class="text-muted small mb-2">{{ _('Topic') }}: {{ entry.question.topic }}</p>
+              <p class="text-muted small mb-3">{{ _('Starred at') }}: {{ entry.created_at.strftime('%Y-%m-%d %H:%M') }}</p>
+              <ul class="list-unstyled mb-3 options-list">
+                <li {% if entry.question.correct_option == 'A' %}class="correct"{% endif %}><strong>A.</strong> {{ entry.question.option_a }}</li>
+                <li {% if entry.question.correct_option == 'B' %}class="correct"{% endif %}><strong>B.</strong> {{ entry.question.option_b }}</li>
+                <li {% if entry.question.correct_option == 'C' %}class="correct"{% endif %}><strong>C.</strong> {{ entry.question.option_c }}</li>
+                <li {% if entry.question.correct_option == 'D' %}class="correct"{% endif %}><strong>D.</strong> {{ entry.question.option_d }}</li>
+              </ul>
+              <div class="alert alert-info py-2 mb-3">{{ _('Correct answer') }}: {{ entry.question.correct_option }}</div>
+              {% if entry.question.explanation %}
+              <p class="text-muted small mb-3">{{ _('Explanation') }}: {{ entry.question.explanation }}</p>
+              {% endif %}
+              <div class="d-flex justify-content-end">
+                <form method="post" action="{{ url_for('student.toggle_star', question_id=entry.question.id) }}">
+                  <input type="hidden" name="action" value="unstar">
+                  <input type="hidden" name="next" value="{{ request.full_path or request.path }}">
+                  <button type="submit" class="btn btn-sm btn-warning">⭐ {{ _('Remove from notebook') }}</button>
+                </form>
+              </div>
+            </div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="alert alert-info mb-0">{{ _('No starred questions yet.') }}</div>
+      {% endif %}
     </div>
   </div>
-  {% endif %}
 {% endif %}
 {% endblock %}
