@@ -242,6 +242,7 @@ def _collect_student_answers(
 
 
 def _serialise_variant_question(variant: VariantQuestion) -> dict[str, Any]:
+    # Shape the learner-facing payload for each stored variant.
     return {
         "id": variant.id,
         "prompt": variant.prompt,
@@ -258,6 +259,7 @@ def _serialise_variant_question(variant: VariantQuestion) -> dict[str, Any]:
 
 
 def _serialise_variant_group(group: VariantQuestionGroup) -> dict[str, Any]:
+    # Group metadata links the variants back to their base question and concept.
     ordered = sorted(group.variants, key=lambda item: item.created_at)
     return {
         "groupId": group.id,
@@ -649,7 +651,9 @@ def generate_variants(question_id: int):
 
     count = max(1, min(count, MAX_VARIANTS_PER_REQUEST))
 
+    # Generate drafts deterministically so follow-up requests are repeatable in QA.
     variants = generate_question_variants(question, count=count)
+    # Knowledge point metadata summarises the underlying concept for the coach UI.
     knowledge_name, knowledge_summary = derive_knowledge_point(question)
 
     group = VariantQuestionGroup(
@@ -662,6 +666,7 @@ def generate_variants(question_id: int):
     db.session.flush()
 
     for draft in variants:
+        # Persist each draft as a full VariantQuestion record tied to the group.
         db.session.add(
             VariantQuestion(
                 group_id=group.id,
@@ -684,6 +689,7 @@ def generate_variants(question_id: int):
 @_require_auth
 def list_variant_groups():
     student: Student = g.current_student
+    # Expose all variant sets the student previously generated, newest first.
     groups = (
         VariantQuestionGroup.query.filter_by(student_id=student.id)
         .order_by(VariantQuestionGroup.created_at.desc())

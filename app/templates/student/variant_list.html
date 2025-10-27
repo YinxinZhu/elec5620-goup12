@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}{{ _('Variant questions') }} · {{ super() }}{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-column flex-lg-row align-items-lg-center justify-content-between gap-3 mb-4">
+  <div>
+    <h1 class="h3 mb-1">{{ _('Variant questions') }}</h1>
+    <p class="text-muted mb-0">{{ _('Review the knowledge points generated from your notebook.') }}</p>
+  </div>
+  <a class="btn btn-outline-secondary" href="{{ url_for('student.notebook') }}">{{ _('Back to notebook') }}</a>
+</div>
+
+{% if group_rows %}
+<div class="card">
+  <div class="card-body">
+    <h2 class="h5 mb-3">{{ _('Generated sets') }}</h2>
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead>
+          <tr>
+            <th scope="col">{{ _('Knowledge point') }}</th>
+            <th scope="col">{{ _('Original question') }}</th>
+            <th scope="col">{{ _('Generated at') }}</th>
+            <th scope="col">{{ _('Variants') }}</th>
+            <th scope="col">{{ _('Actions') }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in group_rows %}
+          {% set group = row.group %}
+          <tr>
+            <td class="fw-semibold">{{ group.knowledge_point_name }}</td>
+            <td>
+              <span class="text-muted">{{ _('Question') }} #{{ group.base_question.qid }}</span>
+              <div class="small text-muted">{{ group.base_question.topic }}</div>
+            </td>
+            <td>{{ group.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+            <td>{{ row.variant_total }}</td>
+            <td>
+              <a class="btn btn-sm btn-primary" href="{{ url_for('student.variant', group=group.id) }}">{{ _('View details') }}</a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% else %}
+<div class="alert alert-info" role="alert">
+  {{ _('Generate variants from the notebook to see them listed here.') }}
+</div>
+{% endif %}
+{% endblock %}
