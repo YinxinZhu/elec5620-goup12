@@ -1,4 +1,4 @@
-# NSW DKT Learning Assistant
+# DKT Learning Assistant
 ## Learner Practice Portal (Unified Web Experience)
 
 This repository powers the unified administrator, coach, and learner web
