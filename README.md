@@ -35,25 +35,14 @@ learner self-registration form directly beneath the login action.
 
 ## Getting started
 
-1. **Clone the repository**
-   ```bash
-   git clone <repository-url>
-   cd elec5620
-   ```
 
-2. **Create and activate a virtual environment**
-   ```bash
-   python -m venv .venv
-   source .venv/bin/activate  # Windows: .venv\\Scripts\\activate
-   ```
-
-3. **Install dependencies**
+1. **Install dependencies**
    ```bash
    pip install --upgrade pip
    pip install -r requirements.txt
    ```
 
-4. **Initialise (or upgrade) the database**
+2. **Initialise (or upgrade) the database**
    ```bash
    flask --app manage.py init-db
    ```
@@ -61,7 +50,7 @@ learner self-registration form directly beneath the login action.
    missing columns/tables and reseed the administrator account when upgrading an
    existing SQLite database.
 
-5. **(Optional) Seed demo data**
+3. **(Optional) Seed demo data**
    ```bash
    flask --app manage.py seed-demo
    ```
@@ -73,7 +62,7 @@ learner self-registration form directly beneath the login action.
    - A 300-question bank (120 NSW questions, 180 across VIC/QLD/SA) plus timed
      papers that satisfy AH-01/AH-02 requirements
 
-6. **Run the development server**
+4. **Run the development server**
    ```bash
    flask --app app run --debug
    ```
