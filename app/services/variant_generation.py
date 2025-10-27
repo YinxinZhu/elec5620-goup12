@@ -13,6 +13,7 @@ from typing import Iterable
 
 from ..models import Question
 
+# Ordered scenarios ensure variant prompts stay reproducible for tests and seed data.
 SCENARIO_LABELS: tuple[str, ...] = (
     "wet-weather driving",
     "night conditions",
@@ -34,10 +35,12 @@ class VariantQuestionDraft:
 
 
 def _scenario_suffix(index: int) -> str:
+    # Rotate through the scenario list instead of relying on randomness.
     return SCENARIO_LABELS[index % len(SCENARIO_LABELS)]
 
 
 def _format_prompt(base_prompt: str, scenario: str, *, number: int) -> str:
+    # Keep the original prompt intact while appending deterministic context.
     return f"{base_prompt} — consider the {scenario} scenario #{number}."
 
 
@@ -58,6 +61,7 @@ def generate_question_variants(
 
     drafts: list[VariantQuestionDraft] = []
     for index in range(count):
+        # Deterministic index ensures repeated requests return identical drafts.
         scenario = _scenario_suffix(index)
         drafts.append(
             VariantQuestionDraft(
