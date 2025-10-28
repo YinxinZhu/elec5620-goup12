@@ -26,8 +26,9 @@
     <div class="col-md-6">
       <label for="preferred_language" class="form-label">{{ _('Preferred language') }}</label>
       <select class="form-select" id="preferred_language" name="preferred_language" required>
-        {% for lang in language_choices %}
-        <option value="{{ lang }}" {% if current_user.preferred_language == lang %}selected{% endif %}>{{ _(lang.title()) }}</option>
+        {% set selected_language = (request.form.get('preferred_language') or current_user.preferred_language or active_language) %}
+        {% for code in language_codes %}
+        <option value="{{ code }}" {% if selected_language == code %}selected{% endif %}>{{ language_name(code) }}</option>
         {% endfor %}
       </select>
     </div>

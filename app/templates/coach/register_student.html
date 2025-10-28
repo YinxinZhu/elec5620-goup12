@@ -36,7 +36,7 @@
         <select class="form-select" id="student_preferred_language" name="student_preferred_language">
           {% for option in language_choices %}
           <option value="{{ option.code }}"{% if request.form.get('student_preferred_language', active_language) == option.code %} selected{% endif %}>
-            {{ option.label }}
+            {{ language_name(option.code) }}
           </option>
           {% endfor %}
         </select>

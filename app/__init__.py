@@ -18,6 +18,7 @@ from .i18n import (
     DEFAULT_LANGUAGE,
     ensure_language_code,
     get_language_choices,
+    language_display_name,
     language_label,
     normalise_language_code,
     translate_text,
@@ -108,10 +109,14 @@ def create_app(config_class: type[Config] | None = None) -> Flask:
         def translate(text: str, **values: str) -> str:
             return translate_text(text, active, **values)
 
+        def language_name(code: str) -> str:
+            return language_display_name(code, active)
+
         return {
             "_": translate,
             "active_language": active,
             "language_choices": get_language_choices(),
+            "language_name": language_name,
             "language_label": language_label,
         }
 
