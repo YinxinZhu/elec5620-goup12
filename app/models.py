@@ -338,6 +338,7 @@ class StarredQuestion(db.Model):
 
 
 class VariantQuestionGroup(db.Model):
+    # Stores metadata for a set of AI-generated variants tied to a base question.
     __tablename__ = "variant_question_groups"
 
     id = db.Column(db.Integer, primary_key=True)
@@ -355,6 +356,7 @@ class VariantQuestionGroup(db.Model):
 
 
 class VariantQuestion(db.Model):
+    # Represents a single generated variant question persisted for review.
     __tablename__ = "variant_questions"
 
     id = db.Column(db.Integer, primary_key=True)

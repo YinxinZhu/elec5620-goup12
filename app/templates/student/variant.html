@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+{% block title %}{{ _('Variant details') }} · {{ super() }}{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-column flex-lg-row align-items-lg-center justify-content-between gap-3 mb-4">
+  <div>
+    <h1 class="h3 mb-1">{{ _('Variant details') }}</h1>
+    <p class="text-muted mb-0">{{ _('Explore alternative questions covering the same knowledge point.') }}</p>
+  </div>
+  <a class="btn btn-outline-secondary" href="{{ url_for('student.variant_list') }}">{{ _('Back to variant list') }}</a>
+</div>
+
+{% if not base_question %}
+<div class="alert alert-warning" role="alert">{{ _('Unable to locate the base question for this request.') }}</div>
+{% else %}
+<div class="card mb-4">
+  <div class="card-body">
+    <h2 class="h5 mb-3">{{ _('Original question') }}</h2>
+    <p class="mb-3">{{ base_question.prompt|safe }}</p>
+    <ul class="list-unstyled">
+      <li><strong>A.</strong> {{ base_question.option_a }}</li>
+      <li><strong>B.</strong> {{ base_question.option_b }}</li>
+      <li><strong>C.</strong> {{ base_question.option_c }}</li>
+      <li><strong>D.</strong> {{ base_question.option_d }}</li>
+    </ul>
+    <div class="alert alert-info mb-0">
+      <div>{{ _('Correct answer') }}: {{ base_question.correct_option }}</div>
+      {% if base_question.explanation %}
+      <div class="mt-2">{{ _('Explanation') }}: {{ base_question.explanation|safe }}</div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+{% if generation_mode %}
+<div class="card">
+  <div class="card-body">
+    <h2 class="h5 mb-3">{{ _('Generate variant questions') }}</h2>
+    <p class="text-muted">{{ _('Select how many variants you need and let the AI draft them for you.') }}</p>
+    <form method="post" class="row g-3">
+      <div class="col-sm-4 col-md-3">
+        <label for="variant_count" class="form-label">{{ _('Variants to generate') }}</label>
+        <input
+          type="number"
+          id="variant_count"
+          name="variant_count"
+          class="form-control"
+          value="{{ variant_default_count }}"
+          min="{{ variant_min_count }}"
+          max="{{ variant_max_count }}"
+        >
+        <div class="form-text">
+          {{ _('Allowed range') }}: {{ variant_min_count }}-{{ variant_max_count }}
+        </div>
+      </div>
+      <div class="col-12">
+        <button type="submit" class="btn btn-lg btn-primary">{{ _('Generate variants') }}</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% elif group %}
+<div class="card mb-4">
+  <div class="card-body">
+    <div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3">
+      <div>
+        <h2 class="h5 mb-1">{{ group.knowledge_point_name }}</h2>
+        <p class="text-muted mb-0">{{ group.knowledge_point_summary }}</p>
+      </div>
+      <span class="badge text-bg-light">{{ _('Generated at') }} {{ group.created_at.strftime('%Y-%m-%d %H:%M') }}</span>
+    </div>
+  </div>
+</div>
+
+{% if variants %}
+<div class="row g-3">
+  {% for variant in variants %}
+  <div class="col-12">
+    <div class="card h-100">
+      <div class="card-body">
+        <h3 class="h6 mb-3">{{ _('Variant question') }} {{ loop.index }}</h3>
+        <p class="mb-3">{{ variant.prompt|safe }}</p>
+        <ul class="list-unstyled mb-3">
+          <li {% if variant.correct_option == 'A' %}class="fw-semibold"{% endif %}><strong>A.</strong> {{ variant.option_a }}</li>
+          <li {% if variant.correct_option == 'B' %}class="fw-semibold"{% endif %}><strong>B.</strong> {{ variant.option_b }}</li>
+          <li {% if variant.correct_option == 'C' %}class="fw-semibold"{% endif %}><strong>C.</strong> {{ variant.option_c }}</li>
+          <li {% if variant.correct_option == 'D' %}class="fw-semibold"{% endif %}><strong>D.</strong> {{ variant.option_d }}</li>
+        </ul>
+        {% if variant.explanation %}
+        <div class="alert alert-secondary mb-0">{{ _('Explanation') }}: {{ variant.explanation|safe }}</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="alert alert-info" role="alert">
+  {{ _('This variant set has no questions yet.') }}
+</div>
+{% endif %}
+{% endif %}
+{% endif %}
+{% endblock %}
