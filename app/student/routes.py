@@ -603,9 +603,6 @@ def notebook():
     entries = []
     total_wrong = 0
     starred_entries: list[StarredQuestion] = []
-    wrong_index = request.args.get("wrong_index", type=int)
-    starred_index = request.args.get("starred_index", type=int)
-
     if selected_state:
         notebook_query = (
             NotebookEntry.query.filter_by(student_id=student.id, state=selected_state)
@@ -626,14 +623,6 @@ def notebook():
         )
         starred_entries = starred_query.all()
 
-    if wrong_index is not None:
-        if wrong_index < 0 or wrong_index >= len(entries):
-            wrong_index = None
-
-    if starred_index is not None:
-        if starred_index < 0 or starred_index >= len(starred_entries):
-            starred_index = None
-
     return render_template(
         "student/notebook.html",
         available_states=available_states,
@@ -641,8 +630,6 @@ def notebook():
         entries=entries,
         total_wrong=total_wrong,
         starred_entries=starred_entries,
-        wrong_index=wrong_index,
-        starred_index=starred_index,
     )
 
 

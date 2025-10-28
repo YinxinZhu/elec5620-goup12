@@ -37,61 +37,37 @@
     </div>
   </div>
 
-  <div class="card mb-4" id="wrong-section">
-    <div class="card-body">
+  <div class="row g-4">
+    <div class="col-12">
       <h2 class="h5 mb-3">{{ _('Wrong answers') }}</h2>
       {% if entries %}
-      {% set starred_kw = {'starred_index': starred_index} if starred_index is not none else {} %}
-      <div class="row g-3 g-lg-4 align-items-start">
-        <div class="col-lg-4">
-          <div class="list-group notebook-list" role="list" aria-label="{{ _('Wrong answers') }}">
-            {% for entry in entries %}
-            <a
-              class="list-group-item list-group-item-action{% if wrong_index is not none and loop.index0 == wrong_index %} active{% endif %}"
-              href="{{ url_for('student.notebook', state=selected_state, wrong_index=loop.index0, **starred_kw) }}#wrong-detail"
-              data-index="{{ loop.index0 }}"
+      <div class="accordion" id="wrongNotebook">
+        {% for entry in entries %}
+        <div class="accordion-item">
+          <h2 class="accordion-header" id="wrongHeading{{ loop.index }}">
+            <button
+              class="accordion-button {% if not loop.first %}collapsed{% endif %}"
+              type="button"
+              data-bs-toggle="collapse"
+              data-bs-target="#wrongCollapse{{ loop.index }}"
+              aria-expanded="{{ 'true' if loop.first else 'false' }}"
+              aria-controls="wrongCollapse{{ loop.index }}"
             >
-              <div class="fw-semibold text-start">{{ entry.question.qid }} · {{ entry.question.prompt|striptags|truncate(80) }}</div>
-              <small class="text-muted d-block">{{ _('Topic') }}: {{ entry.question.topic }}</small>
-              <small class="text-muted d-block">{{ _('Wrong attempts') }}: {{ entry.wrong_count }}</small>
-            </a>
-            {% endfor %}
-          </div>
-        </div>
-        <div class="col-lg-8" id="wrong-detail" data-section="wrong" data-active-index="{{ wrong_index if wrong_index is not none else '' }}">
-          <div class="alert alert-info mb-3{% if wrong_index is not none %} d-none{% endif %}" data-role="empty">
-            {{ _('Select a question from the list to view its details.') }}
-          </div>
-          {% for entry in entries %}
-          {% set prev_index = loop.index0 - 1 %}
-          {% set next_index = loop.index0 + 1 %}
-          <div class="card shadow-sm notebook-entry-card{% if wrong_index is none or loop.index0 != wrong_index %} d-none{% endif %}" data-index="{{ loop.index0 }}">
-            <div class="card-body">
-              <div class="d-flex flex-column flex-md-row justify-content-between gap-3 mb-3">
-                <div>
-                  <p class="text-muted small mb-1">{{ _('Question') }} {{ loop.index0 + 1 }} / {{ entries|length }}</p>
-                  <h3 class="h5 mb-2">{{ entry.question.qid }}</h3>
-                  <div class="mb-2 question-prompt">{{ entry.question.prompt|safe }}</div>
-                  <p class="text-muted small mb-0">{{ _('Topic') }}: {{ entry.question.topic }}</p>
-                  <p class="text-muted small mb-0">
-                    {{ _('Wrong attempts') }}: {{ entry.wrong_count }} · {{ _('Last wrong at') }}:
-                    {{ entry.last_wrong_at.strftime('%Y-%m-%d %H:%M') if entry.last_wrong_at else _('Never') }}
-                  </p>
-                </div>
-                <div class="d-flex flex-wrap gap-2 justify-content-end">
-                  <a
-                    class="btn btn-outline-secondary"
-                    href="{{ url_for('student.notebook', state=selected_state, **starred_kw) }}#wrong-section"
-                    data-role="return"
-                    data-section="wrong"
-                  >{{ _('Return to list') }}</a>
-                  <form method="post" action="{{ url_for('student.remove_notebook_entry', question_id=entry.question.id) }}">
-                    <input type="hidden" name="state" value="{{ entry.state }}">
-                    <input type="hidden" name="next" value="{{ request.full_path or request.path }}">
-                    <button type="submit" class="btn btn-outline-danger">{{ _('Remove from notebook') }}</button>
-                  </form>
-                </div>
-              </div>
+              {{ entry.question.qid }} · {{ entry.question.prompt|striptags|truncate(120) }}
+            </button>
+          </h2>
+          <div
+            id="wrongCollapse{{ loop.index }}"
+            class="accordion-collapse collapse {% if loop.first %}show{% endif %}"
+            aria-labelledby="wrongHeading{{ loop.index }}"
+            data-bs-parent="#wrongNotebook"
+          >
+            <div class="accordion-body">
+              <p class="text-muted small mb-2">{{ _('Topic') }}: {{ entry.question.topic }}</p>
+              <p class="text-muted small mb-3">
+                {{ _('Wrong attempts') }}: {{ entry.wrong_count }} · {{ _('Last wrong at') }}:
+                {{ entry.last_wrong_at.strftime('%Y-%m-%d %H:%M') if entry.last_wrong_at else _('Never') }}
+              </p>
               <ul class="list-unstyled mb-3 options-list">
                 <li {% if entry.question.correct_option == 'A' %}class="correct"{% endif %}><strong>A.</strong> {{ entry.question.option_a }}</li>
                 <li {% if entry.question.correct_option == 'B' %}class="correct"{% endif %}><strong>B.</strong> {{ entry.question.option_b }}</li>
@@ -100,99 +76,52 @@
               </ul>
               <div class="alert alert-info py-2 mb-3">{{ _('Correct answer') }}: {{ entry.question.correct_option }}</div>
               {% if entry.question.explanation %}
-              <p class="text-muted small mb-4">{{ _('Explanation') }}: {{ entry.question.explanation }}</p>
+              <p class="text-muted small mb-3">{{ _('Explanation') }}: {{ entry.question.explanation }}</p>
               {% endif %}
-              <div class="d-flex flex-wrap gap-2">
-                <a
-                  class="btn btn-outline-secondary{% if prev_index < 0 %} disabled{% endif %}"
-                  {% if prev_index >= 0 %}
-                    href="{{ url_for('student.notebook', state=selected_state, wrong_index=prev_index, **starred_kw) }}#wrong-detail"
-                    data-target-index="{{ prev_index }}"
-                  {% else %}
-                    href="#"
-                    tabindex="-1"
-                    aria-disabled="true"
-                  {% endif %}
-                  data-nav="prev"
-                  data-section="wrong"
-                >{{ _('Previous question') }}</a>
-                <a
-                  class="btn btn-outline-primary{% if next_index >= entries|length %} disabled{% endif %}"
-                  {% if next_index < entries|length %}
-                    href="{{ url_for('student.notebook', state=selected_state, wrong_index=next_index, **starred_kw) }}#wrong-detail"
-                    data-target-index="{{ next_index }}"
-                  {% else %}
-                    href="#"
-                    tabindex="-1"
-                    aria-disabled="true"
-                  {% endif %}
-                  data-nav="next"
-                  data-section="wrong"
-                >{{ _('Next question') }}</a>
+              <div class="d-flex justify-content-end">
+                <form method="post" action="{{ url_for('student.remove_notebook_entry', question_id=entry.question.id) }}">
+                  <input type="hidden" name="state" value="{{ entry.state }}">
+                  <input type="hidden" name="next" value="{{ request.full_path or request.path }}">
+                  <button type="submit" class="btn btn-sm btn-outline-danger">{{ _('Remove from notebook') }}</button>
+                </form>
               </div>
             </div>
           </div>
-          {% endfor %}
         </div>
+        {% endfor %}
       </div>
       {% else %}
       <div class="alert alert-success mb-0">{{ _('No wrong answers recorded for this state yet.') }}</div>
       {% endif %}
     </div>
-  </div>
 
-  <div class="card" id="starred-section">
-    <div class="card-body">
+    <div class="col-12">
       <h2 class="h5 mb-3">{{ _('Starred questions') }}</h2>
       {% if starred_entries %}
-      {% set wrong_kw = {'wrong_index': wrong_index} if wrong_index is not none else {} %}
-      <div class="row g-3 g-lg-4 align-items-start">
-        <div class="col-lg-4">
-          <div class="list-group notebook-list" role="list" aria-label="{{ _('Starred questions') }}">
-            {% for entry in starred_entries %}
-            <a
-              class="list-group-item list-group-item-action{% if starred_index is not none and loop.index0 == starred_index %} active{% endif %}"
-              href="{{ url_for('student.notebook', state=selected_state, starred_index=loop.index0, **wrong_kw) }}#starred-detail"
-              data-index="{{ loop.index0 }}"
+      <div class="accordion" id="starredNotebook">
+        {% for entry in starred_entries %}
+        <div class="accordion-item">
+          <h2 class="accordion-header" id="starHeading{{ loop.index }}">
+            <button
+              class="accordion-button {% if not loop.first %}collapsed{% endif %}"
+              type="button"
+              data-bs-toggle="collapse"
+              data-bs-target="#starCollapse{{ loop.index }}"
+              aria-expanded="{{ 'true' if loop.first else 'false' }}"
+              aria-controls="starCollapse{{ loop.index }}"
             >
-              <div class="fw-semibold text-start">{{ entry.question.qid }} · {{ entry.question.prompt|striptags|truncate(80) }}</div>
-              <small class="text-muted d-block">{{ _('Topic') }}: {{ entry.question.topic }}</small>
-              <small class="text-muted d-block">{{ _('Starred at') }}: {{ entry.created_at.strftime('%Y-%m-%d %H:%M') }}</small>
-            </a>
-            {% endfor %}
-          </div>
-        </div>
-        <div class="col-lg-8" id="starred-detail" data-section="starred" data-active-index="{{ starred_index if starred_index is not none else '' }}">
-          <div class="alert alert-info mb-3{% if starred_index is not none %} d-none{% endif %}" data-role="empty">
-            {{ _('Select a question from the list to view its details.') }}
-          </div>
-          {% for entry in starred_entries %}
-          {% set prev_index = loop.index0 - 1 %}
-          {% set next_index = loop.index0 + 1 %}
-          <div class="card shadow-sm notebook-entry-card{% if starred_index is none or loop.index0 != starred_index %} d-none{% endif %}" data-index="{{ loop.index0 }}">
-            <div class="card-body">
-              <div class="d-flex flex-column flex-md-row justify-content-between gap-3 mb-3">
-                <div>
-                  <p class="text-muted small mb-1">{{ _('Question') }} {{ loop.index0 + 1 }} / {{ starred_entries|length }}</p>
-                  <h3 class="h5 mb-2">{{ entry.question.qid }}</h3>
-                  <div class="mb-2 question-prompt">{{ entry.question.prompt|safe }}</div>
-                  <p class="text-muted small mb-0">{{ _('Topic') }}: {{ entry.question.topic }}</p>
-                  <p class="text-muted small mb-0">{{ _('Starred at') }}: {{ entry.created_at.strftime('%Y-%m-%d %H:%M') }}</p>
-                </div>
-                <div class="d-flex flex-wrap gap-2 justify-content-end">
-                  <a
-                    class="btn btn-outline-secondary"
-                    href="{{ url_for('student.notebook', state=selected_state, **wrong_kw) }}#starred-section"
-                    data-role="return"
-                    data-section="starred"
-                  >{{ _('Return to list') }}</a>
-                  <form method="post" action="{{ url_for('student.toggle_star', question_id=entry.question.id) }}">
-                    <input type="hidden" name="action" value="unstar">
-                    <input type="hidden" name="next" value="{{ request.full_path or request.path }}">
-                    <button type="submit" class="btn btn-warning">⭐ {{ _('Remove from notebook') }}</button>
-                  </form>
-                </div>
-              </div>
+              {{ entry.question.qid }} · {{ entry.question.prompt|striptags|truncate(120) }}
+            </button>
+          </h2>
+          <div
+            id="starCollapse{{ loop.index }}"
+            class="accordion-collapse collapse {% if loop.first %}show{% endif %}"
+            aria-labelledby="starHeading{{ loop.index }}"
+            data-bs-parent="#starredNotebook"
+          >
+            <div class="accordion-body">
+              <p class="text-muted small mb-2">{{ _('Topic') }}: {{ entry.question.topic }}</p>
+              <p class="text-muted small mb-3">{{ _('Starred at') }}: {{ entry.created_at.strftime('%Y-%m-%d %H:%M') }}</p>
               <ul class="list-unstyled mb-3 options-list">
                 <li {% if entry.question.correct_option == 'A' %}class="correct"{% endif %}><strong>A.</strong> {{ entry.question.option_a }}</li>
                 <li {% if entry.question.correct_option == 'B' %}class="correct"{% endif %}><strong>B.</strong> {{ entry.question.option_b }}</li>
@@ -201,207 +130,24 @@
               </ul>
               <div class="alert alert-info py-2 mb-3">{{ _('Correct answer') }}: {{ entry.question.correct_option }}</div>
               {% if entry.question.explanation %}
-              <p class="text-muted small mb-4">{{ _('Explanation') }}: {{ entry.question.explanation }}</p>
+              <p class="text-muted small mb-3">{{ _('Explanation') }}: {{ entry.question.explanation }}</p>
               {% endif %}
-              <div class="d-flex flex-wrap gap-2">
-                <a
-                  class="btn btn-outline-secondary{% if prev_index < 0 %} disabled{% endif %}"
-                  {% if prev_index >= 0 %}
-                    href="{{ url_for('student.notebook', state=selected_state, starred_index=prev_index, **wrong_kw) }}#starred-detail"
-                    data-target-index="{{ prev_index }}"
-                  {% else %}
-                    href="#"
-                    tabindex="-1"
-                    aria-disabled="true"
-                  {% endif %}
-                  data-nav="prev"
-                  data-section="starred"
-                >{{ _('Previous question') }}</a>
-                <a
-                  class="btn btn-outline-primary{% if next_index >= starred_entries|length %} disabled{% endif %}"
-                  {% if next_index < starred_entries|length %}
-                    href="{{ url_for('student.notebook', state=selected_state, starred_index=next_index, **wrong_kw) }}#starred-detail"
-                    data-target-index="{{ next_index }}"
-                  {% else %}
-                    href="#"
-                    tabindex="-1"
-                    aria-disabled="true"
-                  {% endif %}
-                  data-nav="next"
-                  data-section="starred"
-                >{{ _('Next question') }}</a>
+              <div class="d-flex justify-content-end">
+                <form method="post" action="{{ url_for('student.toggle_star', question_id=entry.question.id) }}">
+                  <input type="hidden" name="action" value="unstar">
+                  <input type="hidden" name="next" value="{{ request.full_path or request.path }}">
+                  <button type="submit" class="btn btn-sm btn-warning">⭐ {{ _('Remove from notebook') }}</button>
+                </form>
               </div>
             </div>
           </div>
-          {% endfor %}
         </div>
+        {% endfor %}
       </div>
       {% else %}
       <div class="alert alert-info mb-0">{{ _('No starred questions yet.') }}</div>
       {% endif %}
     </div>
   </div>
-  <script>
-    document.addEventListener('DOMContentLoaded', () => {
-      const sections = ['wrong', 'starred'];
-
-      const updateURL = (paramName, value) => {
-        if (typeof window === 'undefined') {
-          return;
-        }
-        const url = new URL(window.location.href);
-        if (value === null) {
-          url.searchParams.delete(paramName);
-        } else {
-          url.searchParams.set(paramName, String(value));
-        }
-        window.history.replaceState({}, '', url);
-      };
-
-      const activateEntry = (sectionConfig, index) => {
-        const { listItems, detailCards, emptyNotice, container, paramName } = sectionConfig;
-        sectionConfig.activeIndex = index;
-
-        listItems.forEach((item) => {
-          const itemIndex = Number(item.dataset.index);
-          if (index !== null && itemIndex === index) {
-            item.classList.add('active');
-            item.setAttribute('aria-current', 'true');
-          } else {
-            item.classList.remove('active');
-            item.removeAttribute('aria-current');
-          }
-        });
-
-        detailCards.forEach((card) => {
-          const cardIndex = Number(card.dataset.index);
-          if (index !== null && cardIndex === index) {
-            card.classList.remove('d-none');
-          } else {
-            card.classList.add('d-none');
-          }
-        });
-
-        if (emptyNotice) {
-          if (index === null) {
-            emptyNotice.classList.remove('d-none');
-          } else {
-            emptyNotice.classList.add('d-none');
-          }
-        }
-
-        if (container) {
-          container.dataset.activeIndex = index === null ? '' : String(index);
-        }
-
-        const total = detailCards.length;
-        if (container) {
-          container.querySelectorAll('[data-nav]').forEach((button) => {
-            if (index === null) {
-              button.classList.add('disabled');
-              button.setAttribute('aria-disabled', 'true');
-              button.dataset.targetIndex = '';
-              return;
-            }
-            const direction = button.dataset.nav === 'prev' ? -1 : 1;
-            const targetIndex = index + direction;
-            if (targetIndex < 0 || targetIndex >= total) {
-              button.classList.add('disabled');
-              button.setAttribute('aria-disabled', 'true');
-              button.dataset.targetIndex = '';
-            } else {
-              button.classList.remove('disabled');
-              button.removeAttribute('aria-disabled');
-              button.dataset.targetIndex = String(targetIndex);
-            }
-          });
-        }
-
-        if (paramName) {
-          updateURL(paramName, index);
-        }
-      };
-
-      sections.forEach((section) => {
-        const sectionCard = document.getElementById(`${section}-section`);
-        if (!sectionCard) {
-          return;
-        }
-        const list = sectionCard.querySelector('.notebook-list');
-        const detailContainer = sectionCard.querySelector(`[data-section="${section}"]`);
-        if (!list || !detailContainer) {
-          return;
-        }
-
-        const listItems = Array.from(list.querySelectorAll('[data-index]'));
-        const detailCards = Array.from(detailContainer.querySelectorAll('.notebook-entry-card'));
-        const emptyNotice = detailContainer.querySelector('[data-role="empty"]');
-        const paramName = section === 'wrong' ? 'wrong_index' : 'starred_index';
-        const initialValue = detailContainer.dataset.activeIndex;
-        const initialIndex = initialValue === undefined || initialValue === '' ? null : Number(initialValue);
-
-        const sectionConfig = {
-          listItems,
-          detailCards,
-          emptyNotice,
-          container: detailContainer,
-          paramName,
-          activeIndex: initialIndex,
-        };
-
-        list.addEventListener('click', (event) => {
-          const link = event.target.closest('[data-index]');
-          if (!link) {
-            return;
-          }
-          event.preventDefault();
-          const targetIndex = Number(link.dataset.index);
-          if (!Number.isNaN(targetIndex)) {
-            activateEntry(sectionConfig, targetIndex);
-          }
-        });
-
-        detailContainer.querySelectorAll('[data-nav]').forEach((button) => {
-          button.addEventListener('click', (event) => {
-            const { targetIndex } = button.dataset;
-            if (!targetIndex) {
-              return;
-            }
-            event.preventDefault();
-            const numericIndex = Number(targetIndex);
-            if (!Number.isNaN(numericIndex)) {
-              activateEntry(sectionConfig, numericIndex);
-            }
-          });
-        });
-
-        detailContainer.querySelectorAll('[data-role="return"]').forEach((link) => {
-          link.addEventListener('click', (event) => {
-            event.preventDefault();
-            activateEntry(sectionConfig, null);
-          });
-        });
-
-        activateEntry(sectionConfig, initialIndex);
-      });
-    });
-  </script>
-  <style>
-    .notebook-list .list-group-item.active {
-      background-color: #0d6efd;
-      border-color: #0d6efd;
-      color: #fff;
-    }
-
-    .options-list li.correct {
-      background-color: rgba(25, 135, 84, 0.1);
-      border-radius: 0.5rem;
-      padding: 0.5rem 0.75rem;
-    }
-
-    .question-prompt > :last-child {
-      margin-bottom: 0;
-    }
-  </style>
 {% endif %}
 {% endblock %}
