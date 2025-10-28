@@ -5,16 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{% block title %}{{ _('Learner Practice Portal') }}{% endblock %}</title>
 
-    <!-- ✅ 使用 Bootstrap 5.3.3，不带 integrity，防止浏览器拦截 -->
+
     <link
       href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
       rel="stylesheet"
     >
 
-    <!-- 自定义样式 -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
 
-    <!-- 可选 favicon（避免 404 报错） -->
     <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}">
   </head>
 
@@ -90,10 +88,8 @@
       {% block content %}{% endblock %}
     </main>
 
-    <!-- ✅ Bootstrap Bundle（含 Popper） -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 
-    <!-- ✅ 检查是否成功加载（调试时用） -->
     <script>
       console.log('Bootstrap loaded:', !!window.bootstrap);
     </script>
