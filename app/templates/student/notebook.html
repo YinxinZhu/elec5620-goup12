@@ -37,51 +37,37 @@
     </div>
   </div>
 
-  <div class="card mb-4" id="wrong-section">
-    <div class="card-body">
+  <div class="row g-4">
+    <div class="col-12">
       <h2 class="h5 mb-3">{{ _('Wrong answers') }}</h2>
       {% if entries %}
-      {% set starred_kw = {'starred_index': starred_index} if starred_index is not none else {} %}
-      <div class="row g-3 g-lg-4 align-items-start">
-        <div class="col-lg-4">
-          <div class="list-group notebook-list" role="list" aria-label="{{ _('Wrong answers') }}">
-            {% for entry in entries %}
-            <a
-              class="list-group-item list-group-item-action {% if loop.index0 == wrong_index %}active{% endif %}"
-              href="{{ url_for('student.notebook', state=selected_state, wrong_index=loop.index0, **starred_kw) }}#wrong-detail"
+      <div class="accordion" id="wrongNotebook">
+        {% for entry in entries %}
+        <div class="accordion-item">
+          <h2 class="accordion-header" id="wrongHeading{{ loop.index }}">
+            <button
+              class="accordion-button {% if not loop.first %}collapsed{% endif %}"
+              type="button"
+              data-bs-toggle="collapse"
+              data-bs-target="#wrongCollapse{{ loop.index }}"
+              aria-expanded="{{ 'true' if loop.first else 'false' }}"
+              aria-controls="wrongCollapse{{ loop.index }}"
             >
-              <div class="fw-semibold text-start">{{ entry.question.qid }} · {{ entry.question.prompt|striptags|truncate(80) }}</div>
-              <small class="text-muted d-block">{{ _('Topic') }}: {{ entry.question.topic }}</small>
-              <small class="text-muted d-block">{{ _('Wrong attempts') }}: {{ entry.wrong_count }}</small>
-            </a>
-            {% endfor %}
-          </div>
-        </div>
-        <div class="col-lg-8" id="wrong-detail">
-          {% if wrong_index is not none %}
-          {% set entry = entries[wrong_index] %}
-          <div class="card shadow-sm">
-            <div class="card-body">
-              <div class="d-flex flex-column flex-md-row justify-content-between gap-3 mb-3">
-                <div>
-                  <p class="text-muted small mb-1">{{ _('Question') }} {{ wrong_index + 1 }} / {{ entries|length }}</p>
-                  <h3 class="h5 mb-2">{{ entry.question.qid }}</h3>
-                  <div class="mb-2 question-prompt">{{ entry.question.prompt|safe }}</div>
-                  <p class="text-muted small mb-0">{{ _('Topic') }}: {{ entry.question.topic }}</p>
-                  <p class="text-muted small mb-0">
-                    {{ _('Wrong attempts') }}: {{ entry.wrong_count }} · {{ _('Last wrong at') }}:
-                    {{ entry.last_wrong_at.strftime('%Y-%m-%d %H:%M') if entry.last_wrong_at else _('Never') }}
-                  </p>
-                </div>
-                <div class="d-flex flex-wrap gap-2 justify-content-end">
-                  <a class="btn btn-outline-secondary" href="{{ url_for('student.notebook', state=selected_state, **starred_kw) }}#wrong-section">{{ _('Return to list') }}</a>
-                  <form method="post" action="{{ url_for('student.remove_notebook_entry', question_id=entry.question.id) }}">
-                    <input type="hidden" name="state" value="{{ entry.state }}">
-                    <input type="hidden" name="next" value="{{ request.full_path or request.path }}">
-                    <button type="submit" class="btn btn-outline-danger">{{ _('Remove from notebook') }}</button>
-                  </form>
-                </div>
-              </div>
+              {{ entry.question.qid }} · {{ entry.question.prompt|striptags|truncate(120) }}
+            </button>
+          </h2>
+          <div
+            id="wrongCollapse{{ loop.index }}"
+            class="accordion-collapse collapse {% if loop.first %}show{% endif %}"
+            aria-labelledby="wrongHeading{{ loop.index }}"
+            data-bs-parent="#wrongNotebook"
+          >
+            <div class="accordion-body">
+              <p class="text-muted small mb-2">{{ _('Topic') }}: {{ entry.question.topic }}</p>
+              <p class="text-muted small mb-3">
+                {{ _('Wrong attempts') }}: {{ entry.wrong_count }} · {{ _('Last wrong at') }}:
+                {{ entry.last_wrong_at.strftime('%Y-%m-%d %H:%M') if entry.last_wrong_at else _('Never') }}
+              </p>
               <ul class="list-unstyled mb-3 options-list">
                 <li {% if entry.question.correct_option == 'A' %}class="correct"{% endif %}><strong>A.</strong> {{ entry.question.option_a }}</li>
                 <li {% if entry.question.correct_option == 'B' %}class="correct"{% endif %}><strong>B.</strong> {{ entry.question.option_b }}</li>
@@ -90,75 +76,52 @@
               </ul>
               <div class="alert alert-info py-2 mb-3">{{ _('Correct answer') }}: {{ entry.question.correct_option }}</div>
               {% if entry.question.explanation %}
-              <p class="text-muted small mb-4">{{ _('Explanation') }}: {{ entry.question.explanation }}</p>
+              <p class="text-muted small mb-3">{{ _('Explanation') }}: {{ entry.question.explanation }}</p>
               {% endif %}
-              <div class="d-flex flex-wrap gap-2">
-                {% set prev_index = wrong_index - 1 %}
-                {% set next_index = wrong_index + 1 %}
-                <a
-                  class="btn btn-outline-secondary {% if prev_index < 0 %}disabled{% endif %}"
-                  {% if prev_index >= 0 %}href="{{ url_for('student.notebook', state=selected_state, wrong_index=prev_index, **starred_kw) }}#wrong-detail"{% else %}tabindex="-1" aria-disabled="true"{% endif %}
-                >{{ _('Previous question') }}</a>
-                <a
-                  class="btn btn-outline-primary {% if next_index >= entries|length %}disabled{% endif %}"
-                  {% if next_index < entries|length %}href="{{ url_for('student.notebook', state=selected_state, wrong_index=next_index, **starred_kw) }}#wrong-detail"{% else %}tabindex="-1" aria-disabled="true"{% endif %}
-                >{{ _('Next question') }}</a>
+              <div class="d-flex justify-content-end">
+                <form method="post" action="{{ url_for('student.remove_notebook_entry', question_id=entry.question.id) }}">
+                  <input type="hidden" name="state" value="{{ entry.state }}">
+                  <input type="hidden" name="next" value="{{ request.full_path or request.path }}">
+                  <button type="submit" class="btn btn-sm btn-outline-danger">{{ _('Remove from notebook') }}</button>
+                </form>
               </div>
             </div>
           </div>
-          {% else %}
-          <div class="alert alert-info mb-0">{{ _('Select a question from the list to view its details.') }}</div>
-          {% endif %}
         </div>
+        {% endfor %}
       </div>
       {% else %}
       <div class="alert alert-success mb-0">{{ _('No wrong answers recorded for this state yet.') }}</div>
       {% endif %}
     </div>
-  </div>
 
-  <div class="card" id="starred-section">
-    <div class="card-body">
+    <div class="col-12">
       <h2 class="h5 mb-3">{{ _('Starred questions') }}</h2>
       {% if starred_entries %}
-      {% set wrong_kw = {'wrong_index': wrong_index} if wrong_index is not none else {} %}
-      <div class="row g-3 g-lg-4 align-items-start">
-        <div class="col-lg-4">
-          <div class="list-group notebook-list" role="list" aria-label="{{ _('Starred questions') }}">
-            {% for entry in starred_entries %}
-            <a
-              class="list-group-item list-group-item-action {% if loop.index0 == starred_index %}active{% endif %}"
-              href="{{ url_for('student.notebook', state=selected_state, starred_index=loop.index0, **wrong_kw) }}#starred-detail"
+      <div class="accordion" id="starredNotebook">
+        {% for entry in starred_entries %}
+        <div class="accordion-item">
+          <h2 class="accordion-header" id="starHeading{{ loop.index }}">
+            <button
+              class="accordion-button {% if not loop.first %}collapsed{% endif %}"
+              type="button"
+              data-bs-toggle="collapse"
+              data-bs-target="#starCollapse{{ loop.index }}"
+              aria-expanded="{{ 'true' if loop.first else 'false' }}"
+              aria-controls="starCollapse{{ loop.index }}"
             >
-              <div class="fw-semibold text-start">{{ entry.question.qid }} · {{ entry.question.prompt|striptags|truncate(80) }}</div>
-              <small class="text-muted d-block">{{ _('Topic') }}: {{ entry.question.topic }}</small>
-              <small class="text-muted d-block">{{ _('Starred at') }}: {{ entry.created_at.strftime('%Y-%m-%d %H:%M') }}</small>
-            </a>
-            {% endfor %}
-          </div>
-        </div>
-        <div class="col-lg-8" id="starred-detail">
-          {% if starred_index is not none %}
-          {% set entry = starred_entries[starred_index] %}
-          <div class="card shadow-sm">
-            <div class="card-body">
-              <div class="d-flex flex-column flex-md-row justify-content-between gap-3 mb-3">
-                <div>
-                  <p class="text-muted small mb-1">{{ _('Question') }} {{ starred_index + 1 }} / {{ starred_entries|length }}</p>
-                  <h3 class="h5 mb-2">{{ entry.question.qid }}</h3>
-                  <div class="mb-2 question-prompt">{{ entry.question.prompt|safe }}</div>
-                  <p class="text-muted small mb-0">{{ _('Topic') }}: {{ entry.question.topic }}</p>
-                  <p class="text-muted small mb-0">{{ _('Starred at') }}: {{ entry.created_at.strftime('%Y-%m-%d %H:%M') }}</p>
-                </div>
-                <div class="d-flex flex-wrap gap-2 justify-content-end">
-                  <a class="btn btn-outline-secondary" href="{{ url_for('student.notebook', state=selected_state, **wrong_kw) }}#starred-section">{{ _('Return to list') }}</a>
-                  <form method="post" action="{{ url_for('student.toggle_star', question_id=entry.question.id) }}">
-                    <input type="hidden" name="action" value="unstar">
-                    <input type="hidden" name="next" value="{{ request.full_path or request.path }}">
-                    <button type="submit" class="btn btn-warning">⭐ {{ _('Remove from notebook') }}</button>
-                  </form>
-                </div>
-              </div>
+              {{ entry.question.qid }} · {{ entry.question.prompt|striptags|truncate(120) }}
+            </button>
+          </h2>
+          <div
+            id="starCollapse{{ loop.index }}"
+            class="accordion-collapse collapse {% if loop.first %}show{% endif %}"
+            aria-labelledby="starHeading{{ loop.index }}"
+            data-bs-parent="#starredNotebook"
+          >
+            <div class="accordion-body">
+              <p class="text-muted small mb-2">{{ _('Topic') }}: {{ entry.question.topic }}</p>
+              <p class="text-muted small mb-3">{{ _('Starred at') }}: {{ entry.created_at.strftime('%Y-%m-%d %H:%M') }}</p>
               <ul class="list-unstyled mb-3 options-list">
                 <li {% if entry.question.correct_option == 'A' %}class="correct"{% endif %}><strong>A.</strong> {{ entry.question.option_a }}</li>
                 <li {% if entry.question.correct_option == 'B' %}class="correct"{% endif %}><strong>B.</strong> {{ entry.question.option_b }}</li>
@@ -167,48 +130,24 @@
               </ul>
               <div class="alert alert-info py-2 mb-3">{{ _('Correct answer') }}: {{ entry.question.correct_option }}</div>
               {% if entry.question.explanation %}
-              <p class="text-muted small mb-4">{{ _('Explanation') }}: {{ entry.question.explanation }}</p>
+              <p class="text-muted small mb-3">{{ _('Explanation') }}: {{ entry.question.explanation }}</p>
               {% endif %}
-              <div class="d-flex flex-wrap gap-2">
-                {% set prev_index = starred_index - 1 %}
-                {% set next_index = starred_index + 1 %}
-                <a
-                  class="btn btn-outline-secondary {% if prev_index < 0 %}disabled{% endif %}"
-                  {% if prev_index >= 0 %}href="{{ url_for('student.notebook', state=selected_state, starred_index=prev_index, **wrong_kw) }}#starred-detail"{% else %}tabindex="-1" aria-disabled="true"{% endif %}
-                >{{ _('Previous question') }}</a>
-                <a
-                  class="btn btn-outline-primary {% if next_index >= starred_entries|length %}disabled{% endif %}"
-                  {% if next_index < starred_entries|length %}href="{{ url_for('student.notebook', state=selected_state, starred_index=next_index, **wrong_kw) }}#starred-detail"{% else %}tabindex="-1" aria-disabled="true"{% endif %}
-                >{{ _('Next question') }}</a>
+              <div class="d-flex justify-content-end">
+                <form method="post" action="{{ url_for('student.toggle_star', question_id=entry.question.id) }}">
+                  <input type="hidden" name="action" value="unstar">
+                  <input type="hidden" name="next" value="{{ request.full_path or request.path }}">
+                  <button type="submit" class="btn btn-sm btn-warning">⭐ {{ _('Remove from notebook') }}</button>
+                </form>
               </div>
             </div>
           </div>
-          {% else %}
-          <div class="alert alert-info mb-0">{{ _('Select a question from the list to view its details.') }}</div>
-          {% endif %}
         </div>
+        {% endfor %}
       </div>
       {% else %}
       <div class="alert alert-info mb-0">{{ _('No starred questions yet.') }}</div>
       {% endif %}
     </div>
   </div>
-  <style>
-    .notebook-list .list-group-item.active {
-      background-color: #0d6efd;
-      border-color: #0d6efd;
-      color: #fff;
-    }
-
-    .options-list li.correct {
-      background-color: rgba(25, 135, 84, 0.1);
-      border-radius: 0.5rem;
-      padding: 0.5rem 0.75rem;
-    }
-
-    .question-prompt > :last-child {
-      margin-bottom: 0;
-    }
-  </style>
 {% endif %}
 {% endblock %}
