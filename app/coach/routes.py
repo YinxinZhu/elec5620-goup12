@@ -50,6 +50,18 @@ STATE_CHOICES: list[str] = [
 LANGUAGE_CODES: list[str] = [choice["code"] for choice in get_language_choices()]
 VALID_OPTIONS = {"A", "B", "C", "D"}
 
+COUNTRY_CALLING_CODES: list[tuple[str, str]] = [
+    ("+61", "Australia (+61)"),
+    ("+1", "Canada / United States (+1)"),
+    ("+44", "United Kingdom (+44)"),
+    ("+64", "New Zealand (+64)"),
+    ("+65", "Singapore (+65)"),
+    ("+81", "Japan (+81)"),
+    ("+86", "China (+86)"),
+    ("+91", "India (+91)"),
+]
+DEFAULT_CALLING_CODE = "+61"
+
 
 def _normalize_mobile_number(raw: str) -> str:
     return "".join(ch for ch in (raw or "") if ch.isdigit())
@@ -197,12 +209,26 @@ def login():
 
 @coach_bp.route("/register", methods=["GET", "POST"])
 def register_student():
+    def _render_form():
+        return render_template(
+            "coach/register_student.html",
+            state_choices=STATE_CHOICES,
+            calling_code_choices=COUNTRY_CALLING_CODES,
+            default_calling_code=DEFAULT_CALLING_CODE,
+        )
+
     if request.method == "GET":
-        return render_template("coach/register_student.html", state_choices=STATE_CHOICES)
+        return _render_form()
 
     name = (request.form.get("student_name") or "").strip()
     mobile_input = (request.form.get("student_mobile_number") or "").strip()
-    mobile_number = _normalize_mobile_number(mobile_input)
+    country_code = (request.form.get("student_country_code") or DEFAULT_CALLING_CODE).strip()
+    valid_calling_codes = {code for code, _ in COUNTRY_CALLING_CODES}
+    if country_code not in valid_calling_codes:
+        flash("Please select a valid country calling code.", "danger")
+        return _render_form()
+
+    mobile_number = _normalize_mobile_number(country_code + mobile_input)
     email = (request.form.get("student_email") or "").strip() or None
     password = request.form.get("student_password", "")
     confirm_password = request.form.get("student_confirm_password", "")
@@ -213,19 +239,19 @@ def register_student():
 
     if not name or not mobile_number or not password:
         flash("Name, mobile number, and password are required to register.", "danger")
-        return render_template("coach/register_student.html", state_choices=STATE_CHOICES)
+        return _render_form()
 
     if password != confirm_password:
         flash("Passwords do not match.", "danger")
-        return render_template("coach/register_student.html", state_choices=STATE_CHOICES)
+        return _render_form()
 
     if state_choice not in STATE_CHOICES:
         flash("Please select a valid state or territory.", "danger")
-        return render_template("coach/register_student.html", state_choices=STATE_CHOICES)
+        return _render_form()
 
     if preferred_language not in LANGUAGE_CODES:
         flash("Please choose a supported language.", "danger")
-        return render_template("coach/register_student.html", state_choices=STATE_CHOICES)
+        return _render_form()
 
     normalized_coach_column = _normalized_mobile_expression(Coach.mobile_number)
     if (
@@ -234,7 +260,7 @@ def register_student():
         .first()
     ):
         flash("This mobile number is already registered to a coach or administrator.", "danger")
-        return render_template("coach/register_student.html", state_choices=STATE_CHOICES)
+        return _render_form()
 
     normalized_student_column = _normalized_mobile_expression(Student.mobile_number)
     if (
@@ -243,11 +269,11 @@ def register_student():
         .first()
     ):
         flash("This mobile number is already registered to a student.", "danger")
-        return render_template("coach/register_student.html", state_choices=STATE_CHOICES)
+        return _render_form()
 
     if email and Student.query.filter(Student.email == email).first():
         flash("This email is already registered to a student.", "danger")
-        return render_template("coach/register_student.html", state_choices=STATE_CHOICES)
+        return _render_form()
 
     student = Student(
         name=name,
@@ -285,7 +311,7 @@ def register_student():
                 "Unable to register with the provided details. Please try again.",
                 "danger",
             )
-        return render_template("coach/register_student.html", state_choices=STATE_CHOICES)
+        return _render_form()
     except Exception:
         db.session.rollback()
         flash(
