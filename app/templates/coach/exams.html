@@ -152,7 +152,7 @@
           <div class="mb-3">
             <label class="form-label" for="default_language">{{ _('Default language') }}</label>
             <select class="form-select" id="default_language" name="default_language">
-              {% for code in language_choices %}
+              {% for code in language_codes %}
               <option value="{{ code }}">{{ code }}</option>
               {% endfor %}
             </select>

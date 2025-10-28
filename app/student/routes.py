@@ -65,7 +65,7 @@ STATE_CHOICES: list[str] = [
     "WA",
 ]
 
-LANGUAGE_CHOICES: list[str] = [choice["code"] for choice in get_language_choices()]
+LANGUAGE_CODES: list[str] = [choice["code"] for choice in get_language_choices()]
 VALID_OPTIONS = {"A", "B", "C", "D"}
 PRACTICE_DEFAULT_COUNT = 5
 PRACTICE_MAX_COUNT = 30
@@ -822,7 +822,7 @@ def profile():
             return render_template(
                 "student/profile.html",
                 state_choices=STATE_CHOICES,
-                language_choices=LANGUAGE_CHOICES,
+                language_codes=LANGUAGE_CODES,
             )
         student.email = email
 
@@ -832,11 +832,11 @@ def profile():
             return render_template(
                 "student/profile.html",
                 state_choices=STATE_CHOICES,
-                language_choices=LANGUAGE_CHOICES,
+                language_codes=LANGUAGE_CODES,
             )
 
         language_choice = (request.form.get("preferred_language") or "").strip().upper()
-        if language_choice in LANGUAGE_CHOICES:
+        if language_choice in LANGUAGE_CODES:
             student.preferred_language = language_choice
             session["preferred_language"] = language_choice
         else:
@@ -844,7 +844,7 @@ def profile():
             return render_template(
                 "student/profile.html",
                 state_choices=STATE_CHOICES,
-                language_choices=LANGUAGE_CHOICES,
+                language_codes=LANGUAGE_CODES,
             )
 
         new_password = request.form.get("new_password", "")
@@ -855,7 +855,7 @@ def profile():
                 return render_template(
                     "student/profile.html",
                     state_choices=STATE_CHOICES,
-                    language_choices=LANGUAGE_CHOICES,
+                    language_codes=LANGUAGE_CODES,
                 )
             student.set_password(new_password)
 
@@ -873,7 +873,7 @@ def profile():
             return render_template(
                 "student/profile.html",
                 state_choices=STATE_CHOICES,
-                language_choices=LANGUAGE_CHOICES,
+                language_codes=LANGUAGE_CODES,
             )
 
         if switch_summary:
@@ -884,7 +884,7 @@ def profile():
     return render_template(
         "student/profile.html",
         state_choices=STATE_CHOICES,
-        language_choices=LANGUAGE_CHOICES,
+        language_codes=LANGUAGE_CODES,
     )
 
 

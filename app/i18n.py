@@ -8,8 +8,18 @@ from typing import Iterable
 DEFAULT_LANGUAGE = "ENGLISH"
 
 SUPPORTED_LANGUAGES: dict[str, dict[str, str]] = {
-    "ENGLISH": {"label": "English", "icon": "🇦🇺", "locale": "en"},
-    "CHINESE": {"label": "简体中文", "icon": "🇨🇳", "locale": "zh-Hans"},
+    "ENGLISH": {
+        "label": "English",
+        "icon": "🇦🇺",
+        "locale": "en",
+        "translation_key": "English",
+    },
+    "CHINESE": {
+        "label": "简体中文",
+        "icon": "🇨🇳",
+        "locale": "zh-Hans",
+        "translation_key": "Chinese",
+    },
 }
 
 
@@ -463,6 +473,16 @@ def language_label(language: str) -> str:
     return f"{icon} {label}".strip()
 
 
+def language_display_name(language: str, active_language: str | None = None) -> str:
+    """Return the display label for ``language`` in the active locale."""
+
+    target_code = ensure_language_code(language)
+    active_code = ensure_language_code(active_language or DEFAULT_LANGUAGE)
+    meta = SUPPORTED_LANGUAGES.get(target_code, {})
+    translation_key = meta.get("translation_key") or meta.get("label") or target_code.title()
+    return translate_text(translation_key, active_code)
+
+
 def translation_catalogue(language: str) -> dict[str, str]:
     """Expose the translation mapping for templates."""
 
@@ -476,6 +496,7 @@ __all__: Iterable[str] = [
     "TRANSLATIONS",
     "ensure_language_code",
     "get_language_choices",
+    "language_display_name",
     "language_label",
     "normalise_language_code",
     "translate_text",

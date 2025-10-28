@@ -47,7 +47,7 @@ STATE_CHOICES: list[str] = [
     "WA",
 ]
 
-LANGUAGE_CHOICES: list[str] = [choice["code"] for choice in get_language_choices()]
+LANGUAGE_CODES: list[str] = [choice["code"] for choice in get_language_choices()]
 VALID_OPTIONS = {"A", "B", "C", "D"}
 
 
@@ -223,7 +223,7 @@ def register_student():
         flash("Please select a valid state or territory.", "danger")
         return render_template("coach/register_student.html", state_choices=STATE_CHOICES)
 
-    if preferred_language not in LANGUAGE_CHOICES:
+    if preferred_language not in LANGUAGE_CODES:
         flash("Please choose a supported language.", "danger")
         return render_template("coach/register_student.html", state_choices=STATE_CHOICES)
 
@@ -747,7 +747,7 @@ def _handle_question_upload_action() -> None:
         return
 
     default_language = (request.form.get("default_language") or "ENGLISH").strip().upper()
-    if default_language not in LANGUAGE_CHOICES:
+    if default_language not in LANGUAGE_CODES:
         default_language = "ENGLISH"
 
     selected_state = _default_question_state(request.form.get("default_state"))
@@ -901,7 +901,7 @@ def exams():
         available_questions=available_questions,
         state_choices=STATE_CHOICES,
         selected_state=selected_state,
-        language_choices=LANGUAGE_CHOICES,
+        language_codes=LANGUAGE_CODES,
     )
 def _parse_upload_headers(header_row: tuple) -> dict[int, str]:
     header_mapping = {
