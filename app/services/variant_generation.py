@@ -145,7 +145,7 @@ def _request_proxy_variants(
     base_url = (
         app.config.get("VARIANT_PROXY_BASE_URL")
         or app.config.get("VARIANT_PROXY_URL")
-        or "http://localhost:18899"
+        or "http://47.74.8.132:18899" # http://localhost:18899
     )
     url = f"{base_url.rstrip('/')}/api/generateVariant"
     timeout = app.config.get("VARIANT_PROXY_TIMEOUT", 45)

@@ -20,7 +20,7 @@ class Config:
     }
     VARIANT_PROXY_BASE_URL = os.environ.get(
         "VARIANT_PROXY_BASE_URL",
-        os.environ.get("VARIANT_PROXY_URL", "http://localhost:18899"),
+        os.environ.get("VARIANT_PROXY_URL", "http://47.74.8.132:18899"), # http://localhost:18899
     )
     VARIANT_PROXY_TOKEN = os.environ.get("VARIANT_PROXY_TOKEN", "9786534210")
     VARIANT_PROXY_TIMEOUT = int(os.environ.get("VARIANT_PROXY_TIMEOUT", "45"))
