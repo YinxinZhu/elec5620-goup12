@@ -15,16 +15,23 @@
     </div>
     <div class="mb-3">
       <label for="student_mobile_number" class="form-label">{{ _('Mobile number') }}</label>
-      <input
-        type="tel"
-        pattern="^[0-9 +]*$"
-        inputmode="tel"
-        class="form-control"
-        id="student_mobile_number"
-        name="student_mobile_number"
-        value="{{ request.form.get('student_mobile_number', '') }}"
-        required
-      >
+      <div class="input-group">
+        <span class="input-group-text" id="student-mobile-prefix">+61</span>
+        <input
+          type="tel"
+          pattern="^\d{10}$"
+          inputmode="numeric"
+          maxlength="10"
+          class="form-control"
+          id="student_mobile_number"
+          name="student_mobile_number"
+          aria-describedby="student-mobile-prefix"
+          value="{{ request.form.get('student_mobile_number', '') }}"
+          placeholder="0412345678"
+          title="{{ _('Enter a 10-digit mobile number.') }}"
+          required
+        >
+      </div>
     </div>
     <div class="mb-3">
       <label for="student_email" class="form-label">{{ _('Email') }} <span class="text-muted">{{ _('(optional)') }}</span></label>

@@ -338,6 +338,11 @@ def login():
         if not _is_safe_redirect_target(next_url):
             next_url = None
 
+        normalized_digits = _normalize_mobile_number(mobile_input)
+        if len(normalized_digits) != 10:
+            flash("Please enter a valid 10-digit mobile number.", "danger")
+            return _render_form()
+
         coach = None
         ambiguous_mobile = False
         if mobile_input:
@@ -387,9 +392,13 @@ def register_student():
 
     name = (request.form.get("student_name") or "").strip()
     mobile_input = (request.form.get("student_mobile_number") or "").strip()
+    mobile_digits = _normalize_mobile_number(mobile_input)
+    if len(mobile_digits) != 10:
+        flash("Please enter a valid 10-digit mobile number.", "danger")
+        return _render_form()
     mobile_number = _normalise_mobile_with_default(mobile_input)
     if not mobile_number:
-        flash("Please enter a valid mobile number.", "danger")
+        flash("Please enter a valid 10-digit mobile number.", "danger")
         return _render_form()
     email = (request.form.get("student_email") or "").strip() or None
     password = request.form.get("student_password", "")

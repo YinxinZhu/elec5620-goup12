@@ -10,17 +10,23 @@
   <form method="post" novalidate>
     <div class="mb-3">
       <label for="mobile_number" class="form-label">{{ _('Mobile number') }}</label>
-      <input
-        type="tel"
-        pattern="^[0-9 +]*$"
-        inputmode="tel"
-        class="form-control auth-input"
-        id="mobile_number"
-        name="mobile_number"
-        value="{{ request.form.get('mobile_number', '') }}"
-        placeholder="{{ _('Enter your mobile number') }}"
-        required
-      >
+      <div class="input-group">
+        <span class="input-group-text" id="mobile-number-prefix">+61</span>
+        <input
+          type="tel"
+          pattern="^\d{10}$"
+          inputmode="numeric"
+          maxlength="10"
+          class="form-control auth-input"
+          id="mobile_number"
+          name="mobile_number"
+          aria-describedby="mobile-number-prefix"
+          value="{{ request.form.get('mobile_number', '') }}"
+          placeholder="0412345678"
+          title="{{ _('Enter a 10-digit mobile number.') }}"
+          required
+        >
+      </div>
     </div>
     <div class="mb-4">
       <label class="form-label visually-hidden" for="password">{{ _('Password') }}</label>
