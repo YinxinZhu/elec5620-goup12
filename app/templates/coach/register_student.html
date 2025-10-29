@@ -14,8 +14,55 @@
       <input type="text" class="form-control" id="student_name" name="student_name" value="{{ request.form.get('student_name', '') }}" required>
     </div>
     <div class="mb-3">
-      <label for="student_mobile_number" class="form-label">{{ _('Mobile number') }}</label>
-      <input type="tel" class="form-control" id="student_mobile_number" name="student_mobile_number" value="{{ request.form.get('student_mobile_number', '') }}" required>
+      <label for="student_mobile_number" id="student_mobile_label" class="form-label">{{ _('Mobile number') }}</label>
+      <div class="mobile-number-group" role="group" aria-labelledby="student_mobile_label">
+        <div class="country-code-wrapper">
+          <label for="student_country_code" id="student_country_code_label" class="form-label visually-hidden">{{ _('Country or region calling code') }}</label>
+          <input
+            type="search"
+            class="form-control form-control-sm country-code-search"
+            id="student_country_code_search"
+            name="student_country_code_search"
+            autocomplete="off"
+            aria-label="{{ _('Search country or code') }}"
+            aria-controls="student_country_code"
+            value="{{ request.form.get('student_country_code_search', '') }}"
+          >
+          <select
+            class="form-select"
+            id="student_country_code"
+            name="student_country_code"
+            required
+            aria-labelledby="student_country_code_label"
+          >
+            {% for option in calling_code_choices %}
+            {% set localized_name = option.names.get(active_language, option.names.get('ENGLISH')) %}
+            <option
+              value="{{ option.code }}"
+              data-iso="{{ option.iso }}"
+              data-search="{{ option.search_terms }}"
+              {% if request.form.get('student_country_code', default_calling_code) == option.code %}selected{% endif %}
+            >{{ option.flag }} {{ localized_name }} ({{ option.code }}) • {{ option.iso }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="local-number-wrapper">
+          <label for="student_mobile_number" class="form-label visually-hidden">{{ _('Local mobile number') }}</label>
+          <input
+            type="tel"
+            pattern="^[0-9 ]*$"
+            inputmode="numeric"
+            class="form-control"
+            id="student_mobile_number"
+            name="student_mobile_number"
+            value="{{ request.form.get('student_mobile_number', '') }}"
+            required
+            aria-describedby="student_mobile_hint"
+          >
+          <div id="student_mobile_hint" class="form-text">{{ _('Digits and spaces only') }}</div>
+        </div>
+        <input type="hidden" id="student_country_code_manual" name="student_country_code_manual" value="{{ '1' if request.form.get('student_country_code_manual') == '1' else '0' }}">
+      </div>
     </div>
     <div class="mb-3">
       <label for="student_email" class="form-label">{{ _('Email') }} <span class="text-muted">{{ _('(optional)') }}</span></label>
@@ -57,5 +104,109 @@
       <button type="submit" class="btn btn-primary">{{ _('Submit registration') }}</button>
     </div>
   </form>
+  <script type="application/json" id="language-default-calling-codes">{{ language_default_calling_codes | tojson }}</script>
+  <script>
+    (() => {
+      const countryCodeSelect = document.getElementById('student_country_code');
+      const countryCodeSearch = document.getElementById('student_country_code_search');
+      const languageSelect = document.getElementById('student_preferred_language');
+      const manualOverrideInput = document.getElementById('student_country_code_manual');
+      const defaultsElement = document.getElementById('language-default-calling-codes');
+      const languageDefaults = defaultsElement ? JSON.parse(defaultsElement.textContent) : {};
+
+      let manualOverride = manualOverrideInput ? manualOverrideInput.value === '1' : false;
+      let programmaticChange = false;
+
+      const normalise = (value) => (value || '').toLowerCase();
+
+      if (countryCodeSelect) {
+        countryCodeSelect.addEventListener('change', () => {
+          if (programmaticChange) {
+            programmaticChange = false;
+            return;
+          }
+          manualOverride = true;
+          if (manualOverrideInput) {
+            manualOverrideInput.value = '1';
+          }
+        });
+      }
+
+      if (languageSelect && countryCodeSelect) {
+        languageSelect.addEventListener('change', () => {
+          const targetLanguage = (languageSelect.value || '').toUpperCase();
+          const desiredCode = languageDefaults[targetLanguage];
+          if (!manualOverride && desiredCode && countryCodeSelect.value !== desiredCode) {
+            programmaticChange = true;
+            countryCodeSelect.value = desiredCode;
+            if (manualOverrideInput) {
+              manualOverrideInput.value = '0';
+            }
+            countryCodeSelect.dispatchEvent(new Event('change', { bubbles: true }));
+          }
+        });
+      }
+
+      if (countryCodeSelect && countryCodeSearch) {
+        const allOptions = Array.from(countryCodeSelect.options);
+        countryCodeSearch.addEventListener('input', () => {
+          const query = normalise(countryCodeSearch.value.trim());
+          let firstVisibleOption = null;
+
+          allOptions.forEach((option) => {
+            const searchSpace = option.dataset.search || normalise(option.textContent);
+            const isVisible = !query || searchSpace.includes(query);
+            option.hidden = !isVisible;
+            if (isVisible && !firstVisibleOption) {
+              firstVisibleOption = option;
+            }
+          });
+
+          if (
+            firstVisibleOption &&
+            (countryCodeSelect.selectedOptions.length === 0 ||
+              countryCodeSelect.selectedOptions[0].hidden)
+          ) {
+            programmaticChange = true;
+            countryCodeSelect.value = firstVisibleOption.value;
+            countryCodeSelect.dispatchEvent(new Event('change', { bubbles: true }));
+          }
+        });
+
+        countryCodeSearch.addEventListener('focus', () => {
+          countryCodeSearch.select();
+        });
+
+        if (countryCodeSearch.value) {
+          countryCodeSearch.dispatchEvent(new Event('input'));
+        }
+      }
+
+      document.addEventListener('reset', (event) => {
+        if (!countryCodeSelect || !(event.target instanceof HTMLFormElement)) {
+          return;
+        }
+
+        if (!event.target.contains(countryCodeSelect)) {
+          return;
+        }
+
+        manualOverride = false;
+        programmaticChange = false;
+        if (manualOverrideInput) {
+          manualOverrideInput.value = '0';
+        }
+
+        if (languageSelect) {
+          languageSelect.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+
+        if (countryCodeSearch) {
+          countryCodeSearch.value = '';
+          countryCodeSearch.dispatchEvent(new Event('input'));
+        }
+      });
+    })();
+  </script>
 </div>
 {% endblock %}
