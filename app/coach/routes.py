@@ -2,12 +2,12 @@ from __future__ import annotations
 
 from datetime import datetime
 import random
+import re
 from uuid import uuid4
 
 from flask import (
     Blueprint,
     flash,
-    g,
     redirect,
     render_template,
     request,
@@ -20,7 +20,7 @@ from sqlalchemy.exc import IntegrityError
 from urllib.parse import urljoin, urlparse
 
 from .. import db
-from ..i18n import DEFAULT_LANGUAGE, ensure_language_code, get_language_choices
+from ..i18n import DEFAULT_LANGUAGE, get_language_choices
 from ..models import (
     Admin,
     Appointment,
@@ -133,6 +133,27 @@ def _combine_calling_code_and_local_number(
             return ""
         return f"{code_digits}{local_digits}"
     return local_digits
+
+
+def _normalise_mobile_with_default(raw_input: str) -> str:
+    digits = _normalize_mobile_number(raw_input)
+    if not digits:
+        return ""
+
+    for entry in COUNTRY_CALLING_CODES:
+        code_digits = _calling_code_digits(str(entry["code"]))
+        if code_digits and digits.startswith(code_digits):
+            return digits
+
+    default_digits = _calling_code_digits(DEFAULT_CALLING_CODE)
+    if not default_digits:
+        return digits
+
+    stripped_local = _strip_trunk_prefix(digits)
+    if not stripped_local:
+        return ""
+
+    return f"{default_digits}{stripped_local}"
 
 
 def _candidate_mobile_numbers(
@@ -307,25 +328,20 @@ def _is_safe_redirect_target(target: str | None) -> bool:
 @coach_bp.route("/login", methods=["GET", "POST"])
 def login():
     def _render_form():
-        active_language = ensure_language_code(
-            getattr(g, "active_language", DEFAULT_LANGUAGE)
-        )
-        return render_template(
-            "coach/login.html",
-            state_choices=STATE_CHOICES,
-            calling_code_choices=COUNTRY_CALLING_CODES,
-            default_calling_code=LANGUAGE_DEFAULT_CALLING_CODES.get(
-                active_language, DEFAULT_CALLING_CODE
-            ),
-        )
+        return render_template("coach/login.html")
 
     if request.method == "POST":
         mobile_input = (request.form.get("mobile_number") or "").strip()
-        country_code_input = (request.form.get("mobile_country_code") or "").strip()
+        country_code_input = DEFAULT_CALLING_CODE
         password = request.form.get("password", "")
         next_url = request.args.get("next")
         if not _is_safe_redirect_target(next_url):
             next_url = None
+
+        normalized_digits = _normalize_mobile_number(mobile_input)
+        if len(normalized_digits) != 10:
+            flash("Please enter a valid 10-digit mobile number.", "danger")
+            return _render_form()
 
         coach = None
         ambiguous_mobile = False
@@ -366,21 +382,9 @@ def login():
 @coach_bp.route("/register", methods=["GET", "POST"])
 def register_student():
     def _render_form():
-        active_language = ensure_language_code(
-            getattr(g, "active_language", DEFAULT_LANGUAGE)
-        )
-        preferred_language = ensure_language_code(
-            request.form.get("student_preferred_language") or active_language
-        )
-
         return render_template(
             "coach/register_student.html",
             state_choices=STATE_CHOICES,
-            calling_code_choices=COUNTRY_CALLING_CODES,
-            default_calling_code=LANGUAGE_DEFAULT_CALLING_CODES.get(
-                preferred_language, DEFAULT_CALLING_CODE
-            ),
-            language_default_calling_codes=LANGUAGE_DEFAULT_CALLING_CODES,
         )
 
     if request.method == "GET":
@@ -388,15 +392,13 @@ def register_student():
 
     name = (request.form.get("student_name") or "").strip()
     mobile_input = (request.form.get("student_mobile_number") or "").strip()
-    country_code = (request.form.get("student_country_code") or DEFAULT_CALLING_CODE).strip()
-    valid_calling_codes = {str(entry["code"]) for entry in COUNTRY_CALLING_CODES}
-    if country_code not in valid_calling_codes:
-        flash("Please select a valid country calling code.", "danger")
+    mobile_digits = _normalize_mobile_number(mobile_input)
+    if len(mobile_digits) != 10:
+        flash("Please enter a valid 10-digit mobile number.", "danger")
         return _render_form()
-
-    mobile_number = _combine_calling_code_and_local_number(country_code, mobile_input)
+    mobile_number = _normalise_mobile_with_default(mobile_input)
     if not mobile_number:
-        flash("Please enter a valid local mobile number.", "danger")
+        flash("Please enter a valid 10-digit mobile number.", "danger")
         return _render_form()
     email = (request.form.get("student_email") or "").strip() or None
     password = request.form.get("student_password", "")
@@ -408,6 +410,10 @@ def register_student():
 
     if not name or not mobile_number or not password:
         flash("Name, mobile number, and password are required to register.", "danger")
+        return _render_form()
+
+    if email and not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email):
+        flash("Please enter a valid email address.", "danger")
         return _render_form()
 
     if password != confirm_password:
@@ -637,9 +643,13 @@ def slots():
                 return redirect(url_for("coach.slots"))
         else:
             selected_coach_id = current_user.id
+        raw_start_time = request.form.get("start_time", "").strip()
+        if not raw_start_time:
+            flash("Invalid start time format", "danger")
+            return redirect(url_for("coach.slots"))
         try:
-            start_time = datetime.fromisoformat(request.form["start_time"])  # type: ignore[arg-type]
-        except (KeyError, ValueError):
+            start_time = datetime.strptime(raw_start_time, "%Y/%m/%d %H:%M")
+        except ValueError:
             flash("Invalid start time format", "danger")
             return redirect(url_for("coach.slots"))
         duration = int(request.form.get("duration", 30))
