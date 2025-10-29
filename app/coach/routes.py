@@ -643,9 +643,13 @@ def slots():
                 return redirect(url_for("coach.slots"))
         else:
             selected_coach_id = current_user.id
+        raw_start_time = request.form.get("start_time", "").strip()
+        if not raw_start_time:
+            flash("Invalid start time format", "danger")
+            return redirect(url_for("coach.slots"))
         try:
-            start_time = datetime.fromisoformat(request.form["start_time"])  # type: ignore[arg-type]
-        except (KeyError, ValueError):
+            start_time = datetime.strptime(raw_start_time, "%Y/%m/%d %H:%M")
+        except ValueError:
             flash("Invalid start time format", "danger")
             return redirect(url_for("coach.slots"))
         duration = int(request.form.get("duration", 30))
