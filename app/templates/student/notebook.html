@@ -53,22 +53,22 @@
         <div class="accordion" id="wrongNotebook">
             {% for entry in entries %}
             <div class="accordion-item">
-                <h2 class="accordion-header" id="wrongHeading{{ loop.index }}">
+                <h2 class="accordion-header" id="wrongHeading{{ entry.id }}">
                     <button
                             class="accordion-button {% if not loop.first %}collapsed{% endif %}"
                             type="button"
                             data-bs-toggle="collapse"
-                            data-bs-target="#wrongCollapse{{ loop.index }}"
+                            data-bs-target="#wrongCollapse{{ entry.id }}"
                             aria-expanded="{{ 'true' if loop.first else 'false' }}"
-                            aria-controls="wrongCollapse{{ loop.index }}"
+                            aria-controls="wrongCollapse{{ entry.id }}"
                     >
                         {{ entry.question.qid }} · {{ entry.question.prompt|striptags|truncate(120) }}
                     </button>
                 </h2>
 
-                <div id="wrongCollapse{{ loop.index }}"
+                <div id="wrongCollapse{{ entry.id }}"
                      class="accordion-collapse collapse {% if loop.first %}show{% endif %}"
-                     aria-labelledby="wrongHeading{{ loop.index }}"
+                     aria-labelledby="wrongHeading{{ entry.id }}"
                      data-bs-parent="#wrongNotebook">
 
                     <div class="accordion-body">
@@ -119,6 +119,31 @@
             </div>     <!-- /accordion-item -->
             {% endfor %}
         </div>       <!-- /accordion -->
+        {% if total_pages > 1 %}
+        <nav class="mt-4" aria-label="{{ _('Wrong notebook pagination') }}">
+            <ul class="pagination justify-content-center">
+                <li class="page-item {% if page <= 1 %}disabled{% endif %}">
+                    <a class="page-link"
+                       href="{{ url_for('student.notebook', state=selected_state, page=page - 1 if page > 1 else 1) }}"
+                       aria-label="{{ _('Previous page') }}"
+                    >{{ _('Previous') }}</a>
+                </li>
+                {% for number in range(1, total_pages + 1) %}
+                <li class="page-item {% if number == page %}active{% endif %}">
+                    <a class="page-link"
+                       href="{{ url_for('student.notebook', state=selected_state, page=number) }}"
+                    >{{ number }}</a>
+                </li>
+                {% endfor %}
+                <li class="page-item {% if page >= total_pages %}disabled{% endif %}">
+                    <a class="page-link"
+                       href="{{ url_for('student.notebook', state=selected_state, page=page + 1 if page < total_pages else total_pages) }}"
+                       aria-label="{{ _('Next page') }}"
+                    >{{ _('Next') }}</a>
+                </li>
+            </ul>
+        </nav>
+        {% endif %}
         {% else %}
         <div class="alert alert-success mb-0">{{ _('No wrong answers recorded for this state yet.') }}</div>
         {% endif %}
