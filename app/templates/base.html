@@ -13,6 +13,8 @@
 
     <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
 
+    {% block extra_head %}{% endblock %}
+
     <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}">
   </head>
 
@@ -29,7 +31,7 @@
         {% endif %}
 
         <a class="navbar-brand" href="{{ url_for(home_endpoint) }}" aria-label="{{ _('Dashboard') }}">
-          {{ _('Practice Portal') }}
+          {{ _('Dashboard') }}
         </a>
 
         <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
@@ -94,5 +96,7 @@
     <script>
       console.log('Bootstrap loaded:', !!window.bootstrap);
     </script>
+
+    {% block extra_scripts %}{% endblock %}
   </body>
 </html>
