@@ -15,7 +15,14 @@
     </div>
     <div class="mb-3">
       <label for="student_mobile_number" class="form-label">{{ _('Mobile number') }}</label>
-      <input type="tel" class="form-control" id="student_mobile_number" name="student_mobile_number" value="{{ request.form.get('student_mobile_number', '') }}" required>
+      <div class="input-group">
+        <select class="form-select flex-shrink-0 w-auto" id="student_country_code" name="student_country_code" required aria-label="{{ _('Country calling code') }}">
+          {% for code, label in calling_code_choices %}
+          <option value="{{ code }}" {% if request.form.get('student_country_code', default_calling_code) == code %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+        <input type="tel" class="form-control" id="student_mobile_number" name="student_mobile_number" value="{{ request.form.get('student_mobile_number', '') }}" required>
+      </div>
     </div>
     <div class="mb-3">
       <label for="student_email" class="form-label">{{ _('Email') }} <span class="text-muted">{{ _('(optional)') }}</span></label>
@@ -36,7 +43,7 @@
         <select class="form-select" id="student_preferred_language" name="student_preferred_language">
           {% for option in language_choices %}
           <option value="{{ option.code }}"{% if request.form.get('student_preferred_language', active_language) == option.code %} selected{% endif %}>
-            {{ option.label }}
+            {{ language_name(option.code) }}
           </option>
           {% endfor %}
         </select>

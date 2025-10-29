@@ -14,7 +14,9 @@ from flask import (
     request,
     session,
     url_for,
+    abort,
 )
+from flask import Blueprint, flash, g, redirect, render_template, request, session, url_for, abort
 from flask_login import current_user, login_required
 from sqlalchemy import func
 from sqlalchemy.orm import joinedload
@@ -33,6 +35,7 @@ from ..models import (
     MockExamSummary,
     NotebookEntry,
     Question,
+    StarredQuestion,
     Student,
     StudentExamSession,
     StudentStateProgress,
@@ -72,7 +75,7 @@ STATE_CHOICES: list[str] = [
     "WA",
 ]
 
-LANGUAGE_CHOICES: list[str] = [choice["code"] for choice in get_language_choices()]
+LANGUAGE_CODES: list[str] = [choice["code"] for choice in get_language_choices()]
 VALID_OPTIONS = {"A", "B", "C", "D"}
 PRACTICE_DEFAULT_COUNT = 5
 PRACTICE_MAX_COUNT = 30
@@ -124,9 +127,33 @@ def _current_exam_session(student: Student) -> StudentExamSession | None:
     return session_obj
 
 
-def _existing_variant_group(student_id: int, question_id: int) -> VariantQuestionGroup | None:
-    """Return the most recent variant group for the given student/question pair."""
+def _starred_question_ids(
+    student: Student,
+    question_ids: set[int] | None = None,
+) -> set[int]:
+    """Return the set of starred question IDs for the given student.
+    If `question_ids` is provided, only return the intersection.
+    """
+    if question_ids is not None and not question_ids:
+        return set()
 
+    query = (
+        StarredQuestion.query
+        .with_entities(StarredQuestion.question_id)
+        .filter_by(student_id=student.id)
+    )
+
+    if question_ids is not None:
+        query = query.filter(StarredQuestion.question_id.in_(question_ids))
+
+    return {row[0] for row in query.all()}
+
+
+def _existing_variant_group(
+    student_id: int,
+    question_id: int,
+) -> VariantQuestionGroup | None:
+    """Return the most recent variant group for the given student/question pair."""
     return (
         VariantQuestionGroup.query.filter_by(
             student_id=student_id,
@@ -139,7 +166,6 @@ def _existing_variant_group(student_id: int, question_id: int) -> VariantQuestio
 
 def _normalise_variant_count(raw_value: str | None) -> int:
     """Clamp the requested variant count into the accepted generation range."""
-
     try:
         parsed_value = int(raw_value) if raw_value is not None else VARIANT_DEFAULT_COUNT
     except ValueError:
@@ -149,7 +175,6 @@ def _normalise_variant_count(raw_value: str | None) -> int:
 
 def _question_accessible(question: Question, student: Student) -> bool:
     """Check whether the student can view or generate variants for the question."""
-
     return question.state_scope in {"ALL", student.state}
 
 
@@ -634,6 +659,7 @@ def notebook():
 
     entries = []
     total_wrong = 0
+    starred_entries: list[StarredQuestion] = []
     if selected_state:
         notebook_query = (
             NotebookEntry.query.filter_by(student_id=student.id, state=selected_state)
@@ -643,17 +669,28 @@ def notebook():
         entries = notebook_query.all()
         total_wrong = sum(entry.wrong_count for entry in entries)
 
+        starred_query = (
+            StarredQuestion.query.filter_by(student_id=student.id)
+            .join(StarredQuestion.question)
+            .filter(
+                (Question.state_scope == "ALL")
+                | (Question.state_scope == selected_state)
+            )
+            .order_by(StarredQuestion.created_at.desc())
+        )
+        starred_entries = starred_query.all()
+
     return render_template(
         "student/notebook.html",
         available_states=available_states,
         selected_state=selected_state,
         entries=entries,
         total_wrong=total_wrong,
+        starred_entries=starred_entries,
     )
 
 
-
-# Start Variant Question AI Generation:
+# ------- Variant Question AI Generation -------
 
 # Variant guestion group list
 @student_bp.route("/variants")
@@ -774,11 +811,11 @@ def variant():
         variant_default_count=VARIANT_DEFAULT_COUNT,
     )
 
+
+# Handle asynchronous generation requests and respond with redirect metadata.
 @student_bp.route("/variant/generate", methods=["POST"])
 @login_required
 def variant_generate():
-    """Handle asynchronous generation requests and respond with redirect metadata."""
-
     student = _current_student()
     if not student:
         return jsonify({"ok": False, "error": _t("Only students can request variants.")}), 403
@@ -857,6 +894,57 @@ def variant_generate():
         }
     )
 
+
+
+# ------------- Bookmark / Unbookmark (GET) -------------
+
+@student_bp.get("/bookmark/<int:question>")
+@login_required
+def bookmark(question: int):
+    """Add a question to the student's starred list, then redirect back."""
+    student = _current_student()
+    if not student:
+        return _redirect_non_students()
+
+    next_url = request.args.get("next") or url_for("student.notebook", state=student.state)
+    q = Question.query.get_or_404(question)
+
+    if not _question_accessible(q, student):
+        abort(403)
+
+    existing = StarredQuestion.query.filter_by(
+        student_id=student.id, question_id=q.id
+    ).first()
+    if not existing:
+        db.session.add(StarredQuestion(student_id=student.id, question_id=q.id))
+        db.session.commit()
+        flash(_t("Question added to your notebook."), "success")
+    else:
+        flash(_t("This question is already in your notebook."), "info")
+
+    return redirect(next_url)
+
+
+@student_bp.get("/unbookmark/<int:question>")
+@login_required
+def unbookmark(question: int):
+    """Remove a question from the student's starred list, then redirect back."""
+    student = _current_student()
+    if not student:
+        return _redirect_non_students()
+
+    next_url = request.args.get("next") or url_for("student.notebook", state=student.state)
+    StarredQuestion.query.filter_by(
+        student_id=student.id, question_id=question
+    ).delete()
+    db.session.commit()
+    flash(_t("Question removed from your notebook."), "info")
+    return redirect(next_url)
+
+# -------------------------------------------------------
+
+    
+# Profile
 @student_bp.route("/profile", methods=["GET", "POST"])
 @login_required
 def profile():
@@ -872,7 +960,7 @@ def profile():
             return render_template(
                 "student/profile.html",
                 state_choices=STATE_CHOICES,
-                language_choices=LANGUAGE_CHOICES,
+                language_codes=LANGUAGE_CODES,
             )
         student.email = email
 
@@ -882,11 +970,11 @@ def profile():
             return render_template(
                 "student/profile.html",
                 state_choices=STATE_CHOICES,
-                language_choices=LANGUAGE_CHOICES,
+                language_codes=LANGUAGE_CODES,
             )
 
         language_choice = (request.form.get("preferred_language") or "").strip().upper()
-        if language_choice in LANGUAGE_CHOICES:
+        if language_choice in LANGUAGE_CODES:
             student.preferred_language = language_choice
             session["preferred_language"] = language_choice
         else:
@@ -894,7 +982,7 @@ def profile():
             return render_template(
                 "student/profile.html",
                 state_choices=STATE_CHOICES,
-                language_choices=LANGUAGE_CHOICES,
+                language_codes=LANGUAGE_CODES,
             )
 
         new_password = request.form.get("new_password", "")
@@ -905,7 +993,7 @@ def profile():
                 return render_template(
                     "student/profile.html",
                     state_choices=STATE_CHOICES,
-                    language_choices=LANGUAGE_CHOICES,
+                    language_codes=LANGUAGE_CODES,
                 )
             student.set_password(new_password)
 
@@ -923,7 +1011,7 @@ def profile():
             return render_template(
                 "student/profile.html",
                 state_choices=STATE_CHOICES,
-                language_choices=LANGUAGE_CHOICES,
+                language_codes=LANGUAGE_CODES,
             )
 
         if switch_summary:
@@ -934,7 +1022,7 @@ def profile():
     return render_template(
         "student/profile.html",
         state_choices=STATE_CHOICES,
-        language_choices=LANGUAGE_CHOICES,
+        language_codes=LANGUAGE_CODES,
     )
 
 
@@ -1013,6 +1101,10 @@ def exam_session(session_id: int):
     if not questions:
         flash(_t("Exam paper has no questions configured."), "warning")
         return redirect(url_for("student.exams"))
+
+    starred_ids = _starred_question_ids(
+        student, {item.question.id for item in questions}
+    )
 
     try:
         requested_index = int(request.args.get("q", "1")) - 1
@@ -1122,6 +1214,7 @@ def exam_session(session_id: int):
         review_total_pages=review_total_pages,
         incorrect_count=incorrect_count,
         incorrect_only=incorrect_only,
+        starred_ids=starred_ids,
     )
 
 
@@ -1165,10 +1258,86 @@ def practice():
     questions = Question.query.filter(Question.id.in_(question_ids)).all()
     lookup = {question.id: question for question in questions}
     ordered_questions = [lookup[qid] for qid in question_ids if qid in lookup]
+    starred_ids = _starred_question_ids(student, set(lookup.keys()))
 
     return render_template(
         "student/practice.html",
         questions=ordered_questions,
         practice_topic=session.get("practice_topic"),
         state=student.state,
+        starred_ids=starred_ids,
     )
+
+
+@student_bp.post("/questions/<int:question_id>/star")
+@login_required
+def toggle_star(question_id: int):
+    student = _current_student()
+    if not student:
+        return _redirect_non_students()
+
+    action = (request.form.get("action") or "star").strip().lower()
+    next_target = (request.form.get("next") or "").strip()
+    if not next_target.startswith("/"):
+        next_target = url_for("student.notebook")
+
+    question = Question.query.filter_by(id=question_id).first()
+    if not question:
+        flash(_t("Question not found."), "warning")
+        return redirect(next_target)
+
+    if question.state_scope not in {"ALL", student.state}:
+        flash(_t("Question not available for your state."), "warning")
+        return redirect(next_target)
+
+    entry = StarredQuestion.query.filter_by(
+        student_id=student.id, question_id=question.id
+    ).first()
+
+    if action == "star":
+        if not entry:
+            db.session.add(StarredQuestion(student_id=student.id, question_id=question.id))
+            db.session.commit()
+            flash(_t("Question added to your notebook."), "success")
+        else:
+            flash(_t("This question is already in your notebook."), "info")
+        return redirect(next_target)
+
+    if entry:
+        db.session.delete(entry)
+        db.session.commit()
+        flash(_t("Question removed from your notebook."), "info")
+    else:
+        flash(_t("Question is not in your notebook."), "info")
+
+    return redirect(next_target)
+
+
+@student_bp.post("/notebook/<int:question_id>/remove")
+@login_required
+def remove_notebook_entry(question_id: int):
+    student = _current_student()
+    if not student:
+        return _redirect_non_students()
+
+    state = (request.form.get("state") or student.state or "").strip().upper()
+    next_target = (request.form.get("next") or "").strip()
+    default_args: dict[str, str] = {}
+    if state:
+        default_args["state"] = state
+    if not next_target.startswith("/"):
+        next_target = url_for("student.notebook", **default_args)
+
+    query = NotebookEntry.query.filter_by(student_id=student.id, question_id=question_id)
+    if state:
+        query = query.filter_by(state=state)
+    entry = query.first()
+
+    if not entry:
+        flash(_t("Notebook entry not found."), "warning")
+        return redirect(next_target)
+
+    db.session.delete(entry)
+    db.session.commit()
+    flash(_t("Notebook entry removed."), "success")
+    return redirect(next_target)

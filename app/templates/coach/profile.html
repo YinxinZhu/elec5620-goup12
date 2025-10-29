@@ -68,7 +68,7 @@
           <input type="hidden" name="next" value="{{ request.full_path }}">
           <select class="form-select" name="language" aria-label="{{ _('Switch interface language') }}">
             {% for option in language_choices %}
-            <option value="{{ option.code }}"{% if option.code == active_language %} selected{% endif %}>{{ option.label }}</option>
+            <option value="{{ option.code }}"{% if option.code == active_language %} selected{% endif %}>{{ language_name(option.code) }}</option>
             {% endfor %}
           </select>
           <button type="submit" class="btn btn-outline-primary">{{ _('Apply language') }}</button>

@@ -8,8 +8,18 @@ from typing import Iterable
 DEFAULT_LANGUAGE = "ENGLISH"
 
 SUPPORTED_LANGUAGES: dict[str, dict[str, str]] = {
-    "ENGLISH": {"label": "English", "icon": "🇦🇺", "locale": "en"},
-    "CHINESE": {"label": "简体中文", "icon": "🇨🇳", "locale": "zh-Hans"},
+    "ENGLISH": {
+        "label": "English",
+        "icon": "🇦🇺",
+        "locale": "en",
+        "translation_key": "English",
+    },
+    "CHINESE": {
+        "label": "简体中文",
+        "icon": "🇨🇳",
+        "locale": "zh-Hans",
+        "translation_key": "Chinese",
+    },
 }
 
 
@@ -237,6 +247,32 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "State": "州",
         "Topic": "考点",
         "Back to exam centre": "返回考试中心",
+        "Variant questions": "变式题",
+        "Variant details": "变式题详情",
+        "Review the knowledge points generated from your notebook.": "查看由错题本生成的知识点。",
+        "Back to notebook": "返回错题本",
+        "Generated sets": "已生成的题组",
+        "Knowledge point": "知识点",
+        "Generated at": "生成时间",
+        "Variants": "变式题数量",
+        "Actions": "操作",
+        "View details": "查看详情",
+        "Generate variants from the notebook to see them listed here.": "在错题本中生成变式题后会显示在此处。",
+        "Explore alternative questions covering the same knowledge point.": "查看涵盖同一知识点的其他题目。",
+        "Back to variant list": "返回变式题列表",
+        "Unable to locate the base question for this request.": "无法找到该请求对应的原题。",
+        "Generate variant questions": "生成变式题",
+        "Select how many variants you need and let the AI draft them for you.": "选择所需的变式题数量，交给 AI 为您生成。",
+        "Variants to generate": "生成题目数量",
+        "Allowed range": "允许范围",
+        "Generate variants": "生成变式题",
+        "Variant question": "变式题",
+        "This variant set has no questions yet.": "该题组尚未包含任何变式题。",
+        "Select a question to generate variants.": "请选择一个题目来生成变式题。",
+        "We could not find that variant set.": "未找到该变式题组。",
+        "The requested question does not exist.": "请求的题目不存在。",
+        "This question is not available for your state.": "该题目不适用于您所在的州。",
+        "Variant questions generated successfully.": "变式题生成成功。",
         "Refresh set": "刷新题目",
         "Correct answer": "正确答案",
         "Explanation": "解析",
@@ -332,6 +368,21 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "Revisit the questions you missed and plan targeted revisions.": "重温错题，制定针对性复习计划。",
         "Select a state to review your notebook.": "请选择州以查看错题笔记。",
         "Wrong answer list": "错题列表",
+        "Wrong answers": "错题",
+        "Starred questions": "收藏题",
+        "Starred questions saved": "已收藏题目数",
+        "Starred at": "收藏时间",
+        "No starred questions yet.": "还没有收藏的题目。",
+        "Add to notebook": "加入笔记",
+        "Remove from notebook": "从笔记移除",
+        "Question added to your notebook.": "题目已加入笔记。",
+        "This question is already in your notebook.": "该题目已在笔记中。",
+        "Question removed from your notebook.": "题目已从笔记移除。",
+        "Question is not in your notebook.": "笔记中没有该题目。",
+        "Notebook entry not found.": "未找到笔记条目。",
+        "Notebook entry removed.": "笔记条目已删除。",
+        "Question not found.": "未找到题目。",
+        "Question not available for your state.": "该题目不适用于你所在的州。",
         "Attempts": "答题次数",
         "Last wrong at": "最近错题时间",
         "Prompt excerpt": "题干摘要",
@@ -437,6 +488,16 @@ def language_label(language: str) -> str:
     return f"{icon} {label}".strip()
 
 
+def language_display_name(language: str, active_language: str | None = None) -> str:
+    """Return the display label for ``language`` in the active locale."""
+
+    target_code = ensure_language_code(language)
+    active_code = ensure_language_code(active_language or DEFAULT_LANGUAGE)
+    meta = SUPPORTED_LANGUAGES.get(target_code, {})
+    translation_key = meta.get("translation_key") or meta.get("label") or target_code.title()
+    return translate_text(translation_key, active_code)
+
+
 def translation_catalogue(language: str) -> dict[str, str]:
     """Expose the translation mapping for templates."""
 
@@ -450,6 +511,7 @@ __all__: Iterable[str] = [
     "TRANSLATIONS",
     "ensure_language_code",
     "get_language_choices",
+    "language_display_name",
     "language_label",
     "normalise_language_code",
     "translate_text",
