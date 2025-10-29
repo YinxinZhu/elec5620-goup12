@@ -39,25 +39,24 @@
         </button>
 
         <div class="collapse navbar-collapse" id="navbarNav">
+          {% set endpoint = request.endpoint or '' %}
           <ul class="navbar-nav me-auto">
             {% if current_user.is_authenticated %}
               {% if is_student %}
-              <li class="nav-item"><a class="nav-link" href="{{ url_for('student.dashboard') }}">{{ _('Dashboard') }}</a></li>
-              <li class="nav-item"><a class="nav-link" href="{{ url_for('student.exams') }}">{{ _('Exam centre') }}</a></li>
-              <li class="nav-item"><a class="nav-link" href="{{ url_for('student.progress') }}">{{ _('Progress') }}</a></li>
-              <li class="nav-item"><a class="nav-link" href="{{ url_for('student.notebook') }}">{{ _('Notebook') }}</a></li>
-              <li class="nav-item"><a class="nav-link" href="{{ url_for('student.variant_list') }}">{{ _('Variant questions') }}</a></li>
-              <li class="nav-item"><a class="nav-link" href="{{ url_for('student.profile') }}">{{ _('Profile') }}</a></li>
+              <li class="nav-item"><a class="nav-link {% if endpoint.startswith('student.exams') %}active{% endif %}" href="{{ url_for('student.exams') }}">{{ _('Exam centre') }}</a></li>
+              <li class="nav-item"><a class="nav-link {% if endpoint == 'student.progress' %}active{% endif %}" href="{{ url_for('student.progress') }}">{{ _('Progress') }}</a></li>
+              <li class="nav-item"><a class="nav-link {% if endpoint.startswith('student.notebook') or endpoint.startswith('student.remove_notebook_entry') %}active{% endif %}" href="{{ url_for('student.notebook') }}">{{ _('Notebook') }}</a></li>
+              <li class="nav-item"><a class="nav-link {% if endpoint.startswith('student.variant') %}active{% endif %}" href="{{ url_for('student.variant_list') }}">{{ _('Variant questions') }}</a></li>
+              <li class="nav-item"><a class="nav-link {% if endpoint.startswith('student.profile') %}active{% endif %}" href="{{ url_for('student.profile') }}">{{ _('Profile') }}</a></li>
               {% else %}
-              <li class="nav-item"><a class="nav-link" href="{{ url_for('coach.dashboard') }}">{{ _('Dashboard') }}</a></li>
-              <li class="nav-item"><a class="nav-link" href="{{ url_for('coach.slots') }}">{{ _('Availability') }}</a></li>
-              <li class="nav-item"><a class="nav-link" href="{{ url_for('coach.appointments') }}">{{ _('Appointments') }}</a></li>
-              <li class="nav-item"><a class="nav-link" href="{{ url_for('coach.students') }}">{{ _('Students') }}</a></li>
-              <li class="nav-item"><a class="nav-link" href="{{ url_for('coach.exams') }}">{{ _('Exams') }}</a></li>
+              <li class="nav-item"><a class="nav-link {% if endpoint.startswith('coach.slots') %}active{% endif %}" href="{{ url_for('coach.slots') }}">{{ _('Availability') }}</a></li>
+              <li class="nav-item"><a class="nav-link {% if endpoint.startswith('coach.appointments') %}active{% endif %}" href="{{ url_for('coach.appointments') }}">{{ _('Appointments') }}</a></li>
+              <li class="nav-item"><a class="nav-link {% if endpoint.startswith('coach.students') %}active{% endif %}" href="{{ url_for('coach.students') }}">{{ _('Students') }}</a></li>
+              <li class="nav-item"><a class="nav-link {% if endpoint.startswith('coach.exams') %}active{% endif %}" href="{{ url_for('coach.exams') }}">{{ _('Exams') }}</a></li>
               {% if current_user.is_admin %}
-              <li class="nav-item"><a class="nav-link" href="{{ url_for('coach.personnel') }}">{{ _('Personnel') }}</a></li>
+              <li class="nav-item"><a class="nav-link {% if endpoint.startswith('coach.personnel') %}active{% endif %}" href="{{ url_for('coach.personnel') }}">{{ _('Personnel') }}</a></li>
               {% endif %}
-              <li class="nav-item"><a class="nav-link" href="{{ url_for('coach.profile') }}">{{ _('Profile') }}</a></li>
+              <li class="nav-item"><a class="nav-link {% if endpoint.startswith('coach.profile') %}active{% endif %}" href="{{ url_for('coach.profile') }}">{{ _('Profile') }}</a></li>
               {% endif %}
             {% endif %}
           </ul>
