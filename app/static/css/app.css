@@ -80,13 +80,13 @@ body {
   font-size: 1.1rem;
 }
 
-.auth-panel .form-control.auth-input {
+.auth-panel .input-group .form-control.auth-input {
   border-radius: 0 999px 999px 0;
   border-left: 0;
   padding-left: 0.25rem;
 }
 
-.auth-panel .form-control.auth-input:focus {
+.auth-panel .input-group .form-control.auth-input:focus {
   box-shadow: none;
 }
 
@@ -198,6 +198,44 @@ body {
 .practice-session .accordion-button:not(.collapsed) {
   color: #0d6efd;
   background-color: rgba(13, 110, 253, 0.08);
+}
+
+.mobile-number-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: stretch;
+}
+
+.country-code-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  flex: 0 0 260px;
+  max-width: 100%;
+}
+
+.country-code-wrapper select {
+  min-width: 0;
+}
+
+.country-code-search {
+  font-size: 0.875rem;
+}
+
+.local-number-wrapper {
+  flex: 1 1 200px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+@media (max-width: 576px) {
+  .country-code-wrapper,
+  .local-number-wrapper {
+    flex: 1 1 100%;
+  }
 }
 
 .practice-session .accordion-body {

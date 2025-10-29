@@ -7,6 +7,7 @@ from uuid import uuid4
 from flask import (
     Blueprint,
     flash,
+    g,
     redirect,
     render_template,
     request,
@@ -19,7 +20,7 @@ from sqlalchemy.exc import IntegrityError
 from urllib.parse import urljoin, urlparse
 
 from .. import db
-from ..i18n import get_language_choices
+from ..i18n import DEFAULT_LANGUAGE, ensure_language_code, get_language_choices
 from ..models import (
     Admin,
     Appointment,
@@ -50,9 +51,174 @@ STATE_CHOICES: list[str] = [
 LANGUAGE_CODES: list[str] = [choice["code"] for choice in get_language_choices()]
 VALID_OPTIONS = {"A", "B", "C", "D"}
 
+def _calling_code_entry(
+    code: str,
+    iso: str,
+    flag: str,
+    english_name: str,
+    chinese_name: str,
+) -> dict[str, str | dict[str, str]]:
+    digits = code.lstrip("+")
+    search_terms = {
+        english_name.lower(),
+        chinese_name.lower(),
+        english_name.replace(" ", "").lower(),
+        chinese_name.replace(" ", "").lower(),
+        iso.lower(),
+        code.lower(),
+        digits,
+    }
+    return {
+        "code": code,
+        "iso": iso,
+        "flag": flag,
+        "names": {"ENGLISH": english_name, "CHINESE": chinese_name},
+        "search_terms": " ".join(sorted(search_terms)),
+    }
+
+
+COUNTRY_CALLING_CODES: list[dict[str, str | dict[str, str]]] = [
+    _calling_code_entry("+61", "AU", "🇦🇺", "Australia", "澳大利亚"),
+    _calling_code_entry("+86", "CN", "🇨🇳", "China mainland", "中国大陆"),
+    _calling_code_entry("+852", "HK", "🇭🇰", "Hong Kong", "中国香港"),
+    _calling_code_entry("+886", "TW", "🇹🇼", "Taiwan", "中国台湾"),
+    _calling_code_entry("+65", "SG", "🇸🇬", "Singapore", "新加坡"),
+    _calling_code_entry("+81", "JP", "🇯🇵", "Japan", "日本"),
+    _calling_code_entry("+82", "KR", "🇰🇷", "South Korea", "韩国"),
+    _calling_code_entry("+60", "MY", "🇲🇾", "Malaysia", "马来西亚"),
+    _calling_code_entry("+64", "NZ", "🇳🇿", "New Zealand", "新西兰"),
+    _calling_code_entry("+44", "GB", "🇬🇧", "United Kingdom", "英国"),
+    _calling_code_entry("+1", "US", "🇺🇸", "United States & Canada", "美国 / 加拿大"),
+    _calling_code_entry("+62", "ID", "🇮🇩", "Indonesia", "印度尼西亚"),
+    _calling_code_entry("+63", "PH", "🇵🇭", "Philippines", "菲律宾"),
+    _calling_code_entry("+66", "TH", "🇹🇭", "Thailand", "泰国"),
+    _calling_code_entry("+84", "VN", "🇻🇳", "Vietnam", "越南"),
+    _calling_code_entry("+91", "IN", "🇮🇳", "India", "印度"),
+]
+
+LANGUAGE_DEFAULT_CALLING_CODES: dict[str, str] = {
+    "ENGLISH": "+61",
+    "CHINESE": "+86",
+}
+
+DEFAULT_CALLING_CODE = LANGUAGE_DEFAULT_CALLING_CODES[DEFAULT_LANGUAGE]
+
 
 def _normalize_mobile_number(raw: str) -> str:
     return "".join(ch for ch in (raw or "") if ch.isdigit())
+
+
+def _calling_code_digits(raw_code: str | None) -> str:
+    return "".join(ch for ch in (raw_code or "") if ch.isdigit())
+
+
+def _strip_trunk_prefix(local_digits: str) -> str:
+    if local_digits.startswith("0"):
+        stripped = local_digits.lstrip("0")
+        if stripped:
+            return stripped
+    return local_digits
+
+
+def _combine_calling_code_and_local_number(
+    raw_code: str, raw_local: str
+) -> str:
+    local_digits = _normalize_mobile_number(raw_local)
+    if not local_digits:
+        return ""
+    code_digits = _calling_code_digits(raw_code)
+    if code_digits:
+        local_digits = _strip_trunk_prefix(local_digits)
+        if not local_digits:
+            return ""
+        return f"{code_digits}{local_digits}"
+    return local_digits
+
+
+def _candidate_mobile_numbers(
+    raw_input: str, selected_code: str | None = None
+) -> list[str]:
+    normalized = _normalize_mobile_number(raw_input)
+    if not normalized:
+        return []
+
+    variants: list[str] = []
+    seen: set[str] = set()
+
+    def _add(value: str) -> None:
+        if value and value not in seen:
+            variants.append(value)
+            seen.add(value)
+
+    _add(normalized)
+
+    has_known_prefix = False
+    for entry in COUNTRY_CALLING_CODES:
+        code_digits = _calling_code_digits(str(entry["code"]))
+        if code_digits and normalized.startswith(code_digits):
+            has_known_prefix = True
+            remainder = normalized[len(code_digits) :]
+            if remainder:
+                normalized_remainder = _strip_trunk_prefix(remainder)
+                _add(f"{code_digits}{normalized_remainder}")
+            break
+
+    trimmed = _strip_trunk_prefix(normalized)
+    if trimmed and trimmed != normalized:
+        _add(trimmed)
+
+    if has_known_prefix:
+        return variants
+
+    basis = trimmed or normalized
+    if not basis:
+        return variants
+
+    if selected_code:
+        code_digits = _calling_code_digits(selected_code)
+        if code_digits:
+            _add(f"{code_digits}{basis}")
+    else:
+        for entry in COUNTRY_CALLING_CODES:
+            code_digits = _calling_code_digits(str(entry["code"]))
+            if code_digits:
+                _add(f"{code_digits}{basis}")
+
+    return variants
+
+
+def _locate_account_by_mobile(model, raw_input: str, selected_code: str | None = None):
+    variants = _candidate_mobile_numbers(raw_input, selected_code)
+    if not variants:
+        return None, False
+
+    normalized_column = _normalized_mobile_expression(model.mobile_number)
+    matches = (
+        model.query.filter(normalized_column.in_(variants))
+        .order_by(model.id.asc())
+        .all()
+    )
+    if not matches:
+        return None, False
+
+    normalized_to_records: dict[str, list] = {}
+    for record in matches:
+        normalized_value = _normalize_mobile_number(record.mobile_number)
+        normalized_to_records.setdefault(normalized_value, []).append(record)
+
+    if len(normalized_to_records) != 1:
+        return None, True
+
+    records = next(iter(normalized_to_records.values()))
+    if len(records) > 1:
+        return None, True
+
+    normalized_value = _normalize_mobile_number(records[0].mobile_number)
+    for variant in variants:
+        if variant == normalized_value:
+            return records[0], False
+
+    return records[0], False
 
 
 def _normalized_mobile_expression(column):
@@ -140,69 +306,98 @@ def _is_safe_redirect_target(target: str | None) -> bool:
 
 @coach_bp.route("/login", methods=["GET", "POST"])
 def login():
+    def _render_form():
+        active_language = ensure_language_code(
+            getattr(g, "active_language", DEFAULT_LANGUAGE)
+        )
+        return render_template(
+            "coach/login.html",
+            state_choices=STATE_CHOICES,
+            calling_code_choices=COUNTRY_CALLING_CODES,
+            default_calling_code=LANGUAGE_DEFAULT_CALLING_CODES.get(
+                active_language, DEFAULT_CALLING_CODE
+            ),
+        )
+
     if request.method == "POST":
         mobile_input = (request.form.get("mobile_number") or "").strip()
-        normalized_mobile = _normalize_mobile_number(mobile_input)
+        country_code_input = (request.form.get("mobile_country_code") or "").strip()
         password = request.form.get("password", "")
         next_url = request.args.get("next")
         if not _is_safe_redirect_target(next_url):
             next_url = None
 
         coach = None
-        if normalized_mobile:
-            normalized_column = _normalized_mobile_expression(Coach.mobile_number)
-            coach = (
-                Coach.query.filter(normalized_column == normalized_mobile)
-                .order_by(Coach.id.asc())
-                .first()
-            )
-        if coach is None and mobile_input:
-            coach = (
-                Coach.query.filter(Coach.mobile_number == mobile_input)
-                .order_by(Coach.id.asc())
-                .first()
+        ambiguous_mobile = False
+        if mobile_input:
+            coach, ambiguous_mobile = _locate_account_by_mobile(
+                Coach, mobile_input, country_code_input
             )
 
-        if coach and coach.check_password(password):
+        if not ambiguous_mobile and coach and coach.check_password(password):
             login_user(coach)
             flash("Welcome back!", "success")
             return redirect(next_url or url_for("coach.dashboard"))
 
         student = None
-        if normalized_mobile and coach is None:
-            normalized_student_column = _normalized_mobile_expression(Student.mobile_number)
-            student = (
-                Student.query.filter(normalized_student_column == normalized_mobile)
-                .order_by(Student.id.asc())
-                .first()
-            )
-        if student is None and coach is None and mobile_input:
-            student = (
-                Student.query.filter(Student.mobile_number == mobile_input)
-                .order_by(Student.id.asc())
-                .first()
+        if not ambiguous_mobile and coach is None and mobile_input:
+            student, ambiguous_mobile = _locate_account_by_mobile(
+                Student, mobile_input, country_code_input
             )
 
-        if student and student.check_password(password):
+        if not ambiguous_mobile and student and student.check_password(password):
             login_user(student)
             flash("Welcome back!", "success")
             return redirect(next_url or url_for("student.dashboard"))
 
-        flash("Invalid mobile number or password", "danger")
-    return render_template(
-        "coach/login.html",
-        state_choices=STATE_CHOICES,
-    )
+        if ambiguous_mobile:
+            flash(
+                "Multiple accounts match that mobile number. Please include your country calling code.",
+                "danger",
+            )
+        else:
+            flash("Invalid mobile number or password", "danger")
+
+        return _render_form()
+
+    return _render_form()
 
 
 @coach_bp.route("/register", methods=["GET", "POST"])
 def register_student():
+    def _render_form():
+        active_language = ensure_language_code(
+            getattr(g, "active_language", DEFAULT_LANGUAGE)
+        )
+        preferred_language = ensure_language_code(
+            request.form.get("student_preferred_language") or active_language
+        )
+
+        return render_template(
+            "coach/register_student.html",
+            state_choices=STATE_CHOICES,
+            calling_code_choices=COUNTRY_CALLING_CODES,
+            default_calling_code=LANGUAGE_DEFAULT_CALLING_CODES.get(
+                preferred_language, DEFAULT_CALLING_CODE
+            ),
+            language_default_calling_codes=LANGUAGE_DEFAULT_CALLING_CODES,
+        )
+
     if request.method == "GET":
-        return render_template("coach/register_student.html", state_choices=STATE_CHOICES)
+        return _render_form()
 
     name = (request.form.get("student_name") or "").strip()
     mobile_input = (request.form.get("student_mobile_number") or "").strip()
-    mobile_number = _normalize_mobile_number(mobile_input)
+    country_code = (request.form.get("student_country_code") or DEFAULT_CALLING_CODE).strip()
+    valid_calling_codes = {str(entry["code"]) for entry in COUNTRY_CALLING_CODES}
+    if country_code not in valid_calling_codes:
+        flash("Please select a valid country calling code.", "danger")
+        return _render_form()
+
+    mobile_number = _combine_calling_code_and_local_number(country_code, mobile_input)
+    if not mobile_number:
+        flash("Please enter a valid local mobile number.", "danger")
+        return _render_form()
     email = (request.form.get("student_email") or "").strip() or None
     password = request.form.get("student_password", "")
     confirm_password = request.form.get("student_confirm_password", "")
@@ -213,19 +408,19 @@ def register_student():
 
     if not name or not mobile_number or not password:
         flash("Name, mobile number, and password are required to register.", "danger")
-        return render_template("coach/register_student.html", state_choices=STATE_CHOICES)
+        return _render_form()
 
     if password != confirm_password:
         flash("Passwords do not match.", "danger")
-        return render_template("coach/register_student.html", state_choices=STATE_CHOICES)
+        return _render_form()
 
     if state_choice not in STATE_CHOICES:
         flash("Please select a valid state or territory.", "danger")
-        return render_template("coach/register_student.html", state_choices=STATE_CHOICES)
+        return _render_form()
 
     if preferred_language not in LANGUAGE_CODES:
         flash("Please choose a supported language.", "danger")
-        return render_template("coach/register_student.html", state_choices=STATE_CHOICES)
+        return _render_form()
 
     normalized_coach_column = _normalized_mobile_expression(Coach.mobile_number)
     if (
@@ -234,7 +429,7 @@ def register_student():
         .first()
     ):
         flash("This mobile number is already registered to a coach or administrator.", "danger")
-        return render_template("coach/register_student.html", state_choices=STATE_CHOICES)
+        return _render_form()
 
     normalized_student_column = _normalized_mobile_expression(Student.mobile_number)
     if (
@@ -243,11 +438,11 @@ def register_student():
         .first()
     ):
         flash("This mobile number is already registered to a student.", "danger")
-        return render_template("coach/register_student.html", state_choices=STATE_CHOICES)
+        return _render_form()
 
     if email and Student.query.filter(Student.email == email).first():
         flash("This email is already registered to a student.", "danger")
-        return render_template("coach/register_student.html", state_choices=STATE_CHOICES)
+        return _render_form()
 
     student = Student(
         name=name,
@@ -285,7 +480,7 @@ def register_student():
                 "Unable to register with the provided details. Please try again.",
                 "danger",
             )
-        return render_template("coach/register_student.html", state_choices=STATE_CHOICES)
+        return _render_form()
     except Exception:
         db.session.rollback()
         flash(
