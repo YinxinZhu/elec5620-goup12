@@ -6,6 +6,7 @@ import random
 
 from flask import (
     Blueprint,
+    Response,
     flash,
     g,
     jsonify,
@@ -16,7 +17,6 @@ from flask import (
     url_for,
     abort,
 )
-from flask import Blueprint, flash, g, redirect, render_template, request, session, url_for, abort
 from flask_login import current_user, login_required
 from sqlalchemy import func
 from sqlalchemy.orm import joinedload
@@ -57,6 +57,7 @@ from ..services.progress import (
     ProgressAccessError,
     ProgressValidationError,
     ProgressTrendPoint,
+    export_state_progress_csv,
     get_progress_summary,
     get_progress_trend,
 )
@@ -575,7 +576,9 @@ def progress_overview():
         export_params["start"] = start_date.isoformat()
     if end_date:
         export_params["end"] = end_date.isoformat()
-    export_url = url_for("api.progress_export", **export_params) if selected_state else None
+    export_url = (
+        url_for("student.progress_export", **export_params) if selected_state else None
+    )
 
     goal_form_defaults = {
         "state": selected_state or "",
@@ -618,6 +621,82 @@ def progress_overview():
     )
 
 
+@student_bp.route("/progress/export", methods=["GET"], endpoint="progress_export")
+@login_required
+def progress_export():
+    student = _current_student()
+    if not student:
+        return _redirect_non_students()
+
+    def _normalise(code: str | None) -> str:
+        return (code or "").strip().upper()
+
+    def _parse_date_param(value: str | None):
+        if not value:
+            return None
+        try:
+            return datetime.strptime(value, "%Y-%m-%d").date()
+        except ValueError:
+            return None
+
+    requested_state = _normalise(request.args.get("state"))
+
+    progress_records = (
+        StudentStateProgress.query.with_entities(
+            func.upper(StudentStateProgress.state).label("state"),
+            StudentStateProgress.last_active_at,
+        )
+        .filter_by(student_id=student.id)
+        .order_by(StudentStateProgress.last_active_at.desc())
+        .all()
+    )
+
+    available_states: list[str] = []
+    seen: set[str] = set()
+    for state_code, _last_active in progress_records:
+        code = _normalise(state_code)
+        if code and code not in seen:
+            available_states.append(code)
+            seen.add(code)
+
+    current_state = _normalise(student.state)
+    if current_state and current_state not in seen:
+        available_states.insert(0, current_state)
+        seen.add(current_state)
+
+    if not requested_state or requested_state not in seen:
+        flash(_t("Select a valid state before exporting progress."), "warning")
+        return redirect(url_for("student.progress"))
+
+    raw_topic = (request.args.get("topic") or "").strip()
+    start_date = _parse_date_param(request.args.get("start"))
+    end_date = _parse_date_param(request.args.get("end"))
+
+    if start_date and end_date and start_date > end_date:
+        flash(_t("Start date must be before end date."), "danger")
+        return redirect(url_for("student.progress", state=requested_state))
+
+    start_at = datetime.combine(start_date, time.min) if start_date else None
+    end_at = datetime.combine(end_date, time.max) if end_date else None
+
+    try:
+        csv_payload = export_state_progress_csv(
+            student,
+            state=requested_state,
+            acting_student=student,
+            start_at=start_at,
+            end_at=end_at,
+            topic=raw_topic or None,
+        )
+    except (ProgressValidationError, ProgressAccessError) as exc:
+        flash(str(exc), "danger")
+        return redirect(url_for("student.progress", state=requested_state))
+
+    response = Response(csv_payload, mimetype="text/csv")
+    response.headers["Content-Disposition"] = "attachment; filename=progress.csv"
+    return response
+
+
 @student_bp.route("/notebook")
 @login_required
 def notebook():
@@ -629,6 +708,9 @@ def notebook():
         return (code or "").strip().upper()
 
     requested_state = _normalise(request.args.get("state"))
+    page = request.args.get("page", default=1, type=int) or 1
+    page = max(page, 1)
+    per_page = 10
 
     progress_records = (
         StudentStateProgress.query.with_entities(
@@ -660,14 +742,36 @@ def notebook():
     entries = []
     total_wrong = 0
     starred_entries: list[StarredQuestion] = []
+    total_entries = 0
+    total_pages = 1
     if selected_state:
-        notebook_query = (
+        base_query = (
             NotebookEntry.query.filter_by(student_id=student.id, state=selected_state)
             .join(NotebookEntry.question)
-            .order_by(NotebookEntry.last_wrong_at.desc().nullslast())
         )
-        entries = notebook_query.all()
-        total_wrong = sum(entry.wrong_count for entry in entries)
+
+        total_entries = base_query.count()
+        if total_entries:
+            total_pages = max(1, ceil(total_entries / per_page))
+            page = min(page, total_pages)
+        else:
+            page = 1
+            total_pages = 1
+
+        entries = (
+            base_query.order_by(NotebookEntry.last_wrong_at.desc().nullslast())
+            .limit(per_page)
+            .offset((page - 1) * per_page)
+            .all()
+        )
+
+        total_wrong = (
+            db.session.query(func.coalesce(func.sum(NotebookEntry.wrong_count), 0))
+            .filter_by(student_id=student.id, state=selected_state)
+            .scalar()
+            or 0
+        )
+        total_wrong = int(total_wrong)
 
         starred_query = (
             StarredQuestion.query.filter_by(student_id=student.id)
@@ -687,6 +791,10 @@ def notebook():
         entries=entries,
         total_wrong=total_wrong,
         starred_entries=starred_entries,
+        page=page,
+        total_pages=total_pages,
+        total_entries=total_entries,
+        per_page=per_page,
     )
 
 
