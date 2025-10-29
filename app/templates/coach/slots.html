@@ -18,6 +18,7 @@
           id="start_time"
           name="start_time"
           placeholder="{{ 'yyyy/mm/dd --:--' if active_language == 'ENGLISH' else _('yyyy/mm/dd --:--') }}"
+          data-placeholder="{{ 'yyyy/mm/dd --:--' if active_language == 'ENGLISH' else _('yyyy/mm/dd --:--') }}"
           autocomplete="off"
           required
         >
@@ -114,12 +115,16 @@
     if (!input) {
       return;
     }
+    var placeholder = input.dataset.placeholder || input.getAttribute('placeholder') || '';
     var options = {
       enableTime: true,
       time_24hr: true,
       dateFormat: 'Y/m/d H:i',
+      altInput: true,
+      altFormat: '{{ "Y/m/d H:i" if active_language == "ENGLISH" else "Y年/m月/d日 H:i" }}',
       minuteIncrement: 5,
-      allowInput: true
+      allowInput: true,
+      disableMobile: true
     };
     var locale = '{{ "zh" if active_language == "CHINESE" else "en" }}';
     if (locale === 'en') {
@@ -127,6 +132,11 @@
     } else if (flatpickr.l10ns && flatpickr.l10ns[locale]) {
       options.locale = flatpickr.l10ns[locale];
     }
+    options.onReady = options.onValueUpdate = function (selectedDates, dateStr, instance) {
+      if (instance.altInput && placeholder) {
+        instance.altInput.placeholder = placeholder;
+      }
+    };
     flatpickr(input, options);
   });
 </script>
