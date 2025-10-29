@@ -80,13 +80,13 @@ body {
   font-size: 1.1rem;
 }
 
-.auth-panel .form-control.auth-input {
+.auth-panel .input-group .form-control.auth-input {
   border-radius: 0 999px 999px 0;
   border-left: 0;
   padding-left: 0.25rem;
 }
 
-.auth-panel .form-control.auth-input:focus {
+.auth-panel .input-group .form-control.auth-input:focus {
   box-shadow: none;
 }
 

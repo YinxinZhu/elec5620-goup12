@@ -119,16 +119,20 @@
 
       const normalise = (value) => (value || '').toLowerCase();
 
+      const markManualOverride = () => {
+        manualOverride = true;
+        if (manualOverrideInput) {
+          manualOverrideInput.value = '1';
+        }
+      };
+
       if (countryCodeSelect) {
         countryCodeSelect.addEventListener('change', () => {
           if (programmaticChange) {
             programmaticChange = false;
             return;
           }
-          manualOverride = true;
-          if (manualOverrideInput) {
-            manualOverrideInput.value = '1';
-          }
+          markManualOverride();
         });
       }
 
@@ -149,8 +153,9 @@
 
       if (countryCodeSelect && countryCodeSearch) {
         const allOptions = Array.from(countryCodeSelect.options);
-        countryCodeSearch.addEventListener('input', () => {
+        countryCodeSearch.addEventListener('input', (event) => {
           const query = normalise(countryCodeSearch.value.trim());
+          const userInitiated = event.isTrusted;
           let firstVisibleOption = null;
 
           allOptions.forEach((option) => {
@@ -169,7 +174,12 @@
           ) {
             programmaticChange = true;
             countryCodeSelect.value = firstVisibleOption.value;
+            if (userInitiated) {
+              markManualOverride();
+            }
             countryCodeSelect.dispatchEvent(new Event('change', { bubbles: true }));
+          } else if (userInitiated && query) {
+            markManualOverride();
           }
         });
 
