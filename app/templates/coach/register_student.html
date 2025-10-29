@@ -24,9 +24,7 @@
         name="student_mobile_number"
         value="{{ request.form.get('student_mobile_number', '') }}"
         required
-        aria-describedby="student_mobile_hint"
       >
-      <div id="student_mobile_hint" class="form-text">{{ _('Include your country or region code if applicable. Digits, spaces, and "+" only.') }}</div>
     </div>
     <div class="mb-3">
       <label for="student_email" class="form-label">{{ _('Email') }} <span class="text-muted">{{ _('(optional)') }}</span></label>
