@@ -145,7 +145,7 @@ def test_admin_overview_and_slot_creation(client, admin_app):
         coach = Coach.query.filter_by(email="coach@example.com").one()
         original_count = AvailabilitySlot.query.filter_by(coach_id=coach.id).count()
 
-    slot_time = (datetime.utcnow() + timedelta(days=4)).strftime("%Y-%m-%dT%H:%M")
+    slot_time = (datetime.utcnow() + timedelta(days=4)).strftime("%Y/%m/%d %H:%M")
     create_resp = client.post(
         "/coach/slots",
         data={
