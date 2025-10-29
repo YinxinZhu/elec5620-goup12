@@ -1,5 +1,9 @@
 {% extends 'base.html' %}
 {% block title %}{{ _('Availability') }}{% endblock %}
+{% block extra_head %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.css">
+{% endblock %}
+
 {% block content %}
 <h1 class="h3 mb-4">{{ _('Availability management') }}</h1>
 <div class="card mb-4">
@@ -8,7 +12,15 @@
     <form method="post" class="row g-3">
       <div class="col-md-4">
         <label class="form-label" for="start_time">{{ _('Start time') }}</label>
-        <input type="datetime-local" class="form-control" id="start_time" name="start_time" required>
+        <input
+          type="text"
+          class="form-control"
+          id="start_time"
+          name="start_time"
+          placeholder="{{ 'yyyy/mm/dd --:--' if active_language == 'ENGLISH' else _('yyyy/mm/dd --:--') }}"
+          autocomplete="off"
+          required
+        >
       </div>
       <div class="col-md-3">
         <label class="form-label" for="duration">{{ _('Duration') }}</label>
@@ -86,4 +98,36 @@
 {% else %}
 <div class="alert alert-info">{{ _('No availability yet. Add your first slot above.') }}</div>
 {% endif %}
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.js"></script>
+{% if active_language == 'CHINESE' %}
+<script src="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/l10n/zh.js"></script>
+{% endif %}
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    if (typeof flatpickr !== 'function') {
+      return;
+    }
+    var input = document.getElementById('start_time');
+    if (!input) {
+      return;
+    }
+    var options = {
+      enableTime: true,
+      time_24hr: true,
+      dateFormat: 'Y/m/d H:i',
+      minuteIncrement: 5,
+      allowInput: true
+    };
+    var locale = '{{ "zh" if active_language == "CHINESE" else "en" }}';
+    if (locale === 'en') {
+      options.locale = locale;
+    } else if (flatpickr.l10ns && flatpickr.l10ns[locale]) {
+      options.locale = flatpickr.l10ns[locale];
+    }
+    flatpickr(input, options);
+  });
+</script>
 {% endblock %}
