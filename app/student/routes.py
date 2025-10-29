@@ -4,6 +4,18 @@ from datetime import datetime, time, timedelta
 from math import ceil
 import random
 
+from flask import (
+    Blueprint,
+    flash,
+    g,
+    jsonify,
+    redirect,
+    render_template,
+    request,
+    session,
+    url_for,
+    abort,
+)
 from flask import Blueprint, flash, g, redirect, render_template, request, session, url_for, abort
 from flask_login import current_user, login_required
 from sqlalchemy import func
@@ -48,10 +60,7 @@ from ..services.progress import (
     get_progress_summary,
     get_progress_trend,
 )
-from ..services.variant_generation import (
-    derive_knowledge_point,
-    generate_question_variants,
-)
+from ..services.variant_generation import generate_variants_with_metadata
 
 student_bp = Blueprint("student", __name__, url_prefix="/student")
 
@@ -683,6 +692,7 @@ def notebook():
 
 # ------- Variant Question AI Generation -------
 
+# Variant guestion group list
 @student_bp.route("/variants")
 @login_required
 def variant_list():
@@ -720,8 +730,8 @@ def variant_list():
         group_rows=group_rows,
     )
 
-
-@student_bp.route("/variant", methods=["GET", "POST"])
+# Variant guestion api, generation (POST) and view (GET)
+@student_bp.route("/variant")
 @login_required
 def variant():
     """Display details for a variant set or generate a new one for a question."""
@@ -779,43 +789,6 @@ def variant():
         if not group:
             generation_mode = True
 
-    if request.method == "POST" and generation_mode and base_question:
-        requested_count = _normalise_variant_count(
-            request.form.get("variant_count")
-        )  # Number of variants requested via the form
-        knowledge_name, knowledge_summary = derive_knowledge_point(base_question)
-        group = VariantQuestionGroup(
-            student_id=student.id,
-            base_question_id=base_question.id,
-            knowledge_point_name=knowledge_name,
-            knowledge_point_summary=knowledge_summary,
-        )
-        db.session.add(group)
-        db.session.flush()
-
-        drafts = generate_question_variants(
-            base_question, count=requested_count
-        )  # Draft variants returned by the generator
-        for draft in drafts:
-            variant_record = VariantQuestion(
-                group_id=group.id,
-                student_id=student.id,
-                prompt=draft.prompt,
-                option_a=draft.option_a,
-                option_b=draft.option_b,
-                option_c=draft.option_c,
-                option_d=draft.option_d,
-                correct_option=draft.correct_option,
-                explanation=draft.explanation,
-            )
-            db.session.add(variant_record)
-
-        db.session.commit()
-        generation_mode = False
-        flash(_t("Variant questions generated successfully."), "success")
-        # Ensure variants relationship is populated for rendering without reload.
-        db.session.refresh(group)
-
     variant_records: list[VariantQuestion] = []  # Variants to display beneath the question
     if group and not generation_mode:
         variant_records = sorted(
@@ -837,6 +810,91 @@ def variant():
         variant_max_count=VARIANT_MAX_COUNT,
         variant_default_count=VARIANT_DEFAULT_COUNT,
     )
+
+
+# Handle asynchronous generation requests and respond with redirect metadata.
+@student_bp.route("/variant/generate", methods=["POST"])
+@login_required
+def variant_generate():
+    student = _current_student()
+    if not student:
+        return jsonify({"ok": False, "error": _t("Only students can request variants.")}), 403
+
+    payload = request.get_json(silent=True)
+    if payload is None:
+        payload = request.form.to_dict()
+    raw_question_id = payload.get("questionId")
+    raw_variant_count = payload.get("variantCount")
+
+    try:
+        question_id = int(raw_question_id)
+    except (TypeError, ValueError):
+        return jsonify({"ok": False, "error": _t("The question identifier is invalid.")}), 400
+
+    requested_count = _normalise_variant_count(
+        str(raw_variant_count) if raw_variant_count is not None else None
+    )
+
+    question = db.session.get(Question, question_id)
+    if not question:
+        return jsonify({"ok": False, "error": _t("The requested question does not exist.")}), 404
+    if not _question_accessible(question, student):
+        return jsonify({"ok": False, "error": _t("This question is not available for your state.")}), 403
+
+    existing_group = _existing_variant_group(student.id, question.id)
+    if existing_group:
+        flash(_t("Showing your previously generated variants."), "info")
+        return jsonify(
+            {
+                "ok": True,
+                "groupId": existing_group.id,
+                "redirect": url_for("student.variant", group=existing_group.id),
+            }
+        )
+
+    try:
+        knowledge_name, knowledge_summary, drafts = generate_variants_with_metadata(
+            question, count=requested_count
+        )
+    except ValueError:
+        return jsonify({"ok": False, "error": _t("Please choose a valid variant count.")}), 400
+
+    group = VariantQuestionGroup(
+        student_id=student.id,
+        base_question_id=question.id,
+        knowledge_point_name=knowledge_name,
+        knowledge_point_summary=knowledge_summary,
+    )
+    db.session.add(group)
+    db.session.flush()
+
+    for draft in drafts:
+        db.session.add(
+            VariantQuestion(
+                group_id=group.id,
+                student_id=student.id,
+                prompt=draft.prompt,
+                option_a=draft.option_a,
+                option_b=draft.option_b,
+                option_c=draft.option_c,
+                option_d=draft.option_d,
+                correct_option=draft.correct_option,
+                explanation=draft.explanation,
+            )
+        )
+
+    db.session.commit()
+    flash(_t("Variant questions generated successfully."), "success")
+
+    return jsonify(
+        {
+            "ok": True,
+            "groupId": group.id,
+            "redirect": url_for("student.variant", group=group.id),
+        }
+    )
+
+
 
 # ------------- Bookmark / Unbookmark (GET) -------------
 
@@ -885,7 +943,8 @@ def unbookmark(question: int):
 
 # -------------------------------------------------------
 
-
+    
+# Profile
 @student_bp.route("/profile", methods=["GET", "POST"])
 @login_required
 def profile():

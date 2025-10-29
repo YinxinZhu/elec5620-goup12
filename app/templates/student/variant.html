@@ -2,6 +2,28 @@
 {% block title %}{{ _('Variant details') }} · {{ super() }}{% endblock %}
 
 {% block content %}
+<style>
+  #variant-progress {
+    position: fixed;
+    inset: 0;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    background-color: rgba(15, 23, 42, 0.65);
+    z-index: 1080;
+    padding: 1.5rem;
+  }
+  #variant-progress.is-active {
+    display: flex;
+  }
+  #variant-progress .variant-progress-panel {
+    width: min(480px, 100%);
+    background-color: #ffffff;
+    border-radius: 0.75rem;
+    box-shadow: 0 1.25rem 2.5rem rgba(15, 23, 42, 0.25);
+    padding: 2rem;
+  }
+</style>
 <div class="d-flex flex-column flex-lg-row align-items-lg-center justify-content-between gap-3 mb-4">
   <div>
     <h1 class="h3 mb-1">{{ _('Variant details') }}</h1>
@@ -37,24 +59,35 @@
   <div class="card-body">
     <h2 class="h5 mb-3">{{ _('Generate variant questions') }}</h2>
     <p class="text-muted">{{ _('Select how many variants you need and let the AI draft them for you.') }}</p>
-    <form method="post" class="row g-3">
+    <form
+      id="variant-generate-form"
+      class="row g-3"
+      method="post"
+      action="{{ url_for('student.variant_generate') }}"
+      data-generate-url="{{ url_for('student.variant_generate') }}"
+      data-question-id="{{ base_question.id }}"
+    >
+      <input type="hidden" name="questionId" value="{{ base_question.id }}">
       <div class="col-sm-4 col-md-3">
         <label for="variant_count" class="form-label">{{ _('Variants to generate') }}</label>
         <input
           type="number"
           id="variant_count"
-          name="variant_count"
+          name="variantCount"
           class="form-control"
           value="{{ variant_default_count }}"
           min="{{ variant_min_count }}"
           max="{{ variant_max_count }}"
+          required
         >
         <div class="form-text">
           {{ _('Allowed range') }}: {{ variant_min_count }}-{{ variant_max_count }}
         </div>
       </div>
       <div class="col-12">
-        <button type="submit" class="btn btn-lg btn-primary">{{ _('Generate variants') }}</button>
+        <button type="submit" class="btn btn-lg btn-primary" id="variant-generate-submit">
+          {{ _('Generate variants') }}
+        </button>
       </div>
     </form>
   </div>
@@ -101,4 +134,179 @@
 {% endif %}
 {% endif %}
 {% endif %}
+
+<div
+  id="variant-progress"
+  class="variant-progress-overlay"
+  role="dialog"
+  aria-modal="true"
+  aria-live="polite"
+  data-start-text="{{ _('Contacting the AI service. This may take around 10 seconds...') }}"
+  data-success-text="{{ _('Variants ready! Loading results...') }}"
+  data-error-text="{{ _('Generation failed. Please try again.') }}"
+>
+  <div class="variant-progress-panel text-center">
+    <h2 class="h5 mb-3">{{ _('Generating variants') }}</h2>
+    <p class="text-muted mb-4" id="variant-progress-label">
+      {{ _('Contacting the AI service. This may take around 10 seconds...') }}
+    </p>
+    <div class="progress" role="progressbar" aria-describedby="variant-progress-label">
+      <div
+        id="variant-progress-bar"
+        class="progress-bar progress-bar-striped"
+        style="width: 0%"
+        aria-valuemin="0"
+        aria-valuemax="100"
+        aria-valuenow="0"
+      >
+        0%
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  (() => {
+    const form = document.getElementById("variant-generate-form");
+    if (!form) {
+      return;
+    }
+
+    const overlay = document.getElementById("variant-progress");
+    const progressBar = document.getElementById("variant-progress-bar");
+    const progressLabel = document.getElementById("variant-progress-label");
+    const submitButton = document.getElementById("variant-generate-submit");
+
+    const labels = {
+      start: overlay.dataset.startText || "Generating variants...",
+      success: overlay.dataset.successText || "Variants ready!",
+      error: overlay.dataset.errorText || "Generation failed. Please try again.",
+    };
+
+    const updateProgressBar = (value) => {
+      const rounded = Math.round(value);
+      progressBar.style.width = `${value}%`;
+      progressBar.setAttribute("aria-valuenow", String(rounded));
+      progressBar.textContent = `${rounded}%`;
+    };
+
+    const createProgressController = () => {
+      let progress = 0;
+      let phase = "fast";
+      const startTime = Date.now();
+      let timerId = null;
+      let slowStart = null;
+
+      const tick = () => {
+        const now = Date.now();
+        if (phase === "fast") {
+          const elapsed = (now - startTime) / 1000;
+          const target = Math.min(80, (elapsed / 10) * 80);
+          if (target > progress) {
+            progress = target;
+            updateProgressBar(progress);
+          }
+          if (progress >= 80 || elapsed >= 10) {
+            phase = "slow";
+            slowStart = now;
+          }
+        } else if (phase === "slow" && slowStart) {
+          const slowElapsed = (now - slowStart) / 1000;
+          const eased = 80 + 19 * (1 - Math.exp(-slowElapsed / 4));
+          progress = Math.min(99, eased);
+          updateProgressBar(progress);
+        }
+      };
+
+      const start = () => {
+        overlay.classList.add("is-active");
+        progress = 0;
+        phase = "fast";
+        slowStart = null;
+        updateProgressBar(0);
+        progressLabel.textContent = labels.start;
+        timerId = window.setInterval(tick, 100);
+      };
+
+      const stop = () => {
+        if (timerId) {
+          window.clearInterval(timerId);
+          timerId = null;
+        }
+      };
+
+      return {
+        start,
+        complete(message) {
+          phase = "complete";
+          stop();
+          updateProgressBar(100);
+          progressLabel.textContent = message || labels.success;
+        },
+        fail(message) {
+          phase = "complete";
+          stop();
+          progressLabel.textContent = message || labels.error;
+        },
+        hide(delay = 600) {
+          window.setTimeout(() => {
+            overlay.classList.remove("is-active");
+            updateProgressBar(0);
+            progressLabel.textContent = labels.start;
+          }, delay);
+        },
+      };
+    };
+
+    const progress = createProgressController();
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      if (!form.reportValidity()) {
+        return;
+      }
+
+      const countInput = form.querySelector("#variant_count");
+      const countValue = Number.parseInt(countInput.value, 10);
+      const questionId = Number.parseInt(form.dataset.questionId, 10);
+
+      if (!Number.isFinite(questionId)) {
+        return;
+      }
+
+      submitButton.disabled = true;
+      progress.start();
+
+      try {
+        const response = await fetch(form.dataset.generateUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json",
+          },
+          body: JSON.stringify({
+            questionId,
+            variantCount: countValue,
+          }),
+        });
+
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || !data.ok) {
+          const errorMessage = (data && data.error) || labels.error;
+          throw new Error(errorMessage);
+        }
+
+        progress.complete(labels.success);
+        window.setTimeout(() => {
+          window.location.href = data.redirect || window.location.href;
+        }, 300);
+      } catch (error) {
+        progress.fail(error instanceof Error ? error.message : labels.error);
+        progress.hide(1400);
+      } finally {
+        submitButton.disabled = false;
+      }
+    });
+  })();
+</script>
 {% endblock %}
