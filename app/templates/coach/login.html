@@ -9,53 +9,18 @@
   <h1 class="auth-title">{{ _('Login') }}</h1>
   <form method="post" novalidate>
     <div class="mb-3">
-      <label id="mobile_number_label" class="form-label">{{ _('Mobile number') }}</label>
-      <div class="mobile-number-group" role="group" aria-labelledby="mobile_number_label">
-        <div class="country-code-wrapper">
-          <label for="mobile_country_code" class="form-label visually-hidden">{{ _('Country or region calling code') }}</label>
-          <input
-            type="search"
-            class="form-control form-control-sm country-code-search"
-            id="mobile_country_code_search"
-            name="mobile_country_code_search"
-            autocomplete="off"
-            aria-label="{{ _('Search country or code') }}"
-            aria-controls="mobile_country_code"
-            value="{{ request.form.get('mobile_country_code_search', '') }}"
-          >
-          <select
-            class="form-select"
-            id="mobile_country_code"
-            name="mobile_country_code"
-            required
-          >
-            {% for option in calling_code_choices %}
-            {% set localized_name = option.names.get(active_language, option.names.get('ENGLISH')) %}
-            <option
-              value="{{ option.code }}"
-              data-search="{{ option.search_terms }}"
-              {% if request.form.get('mobile_country_code', default_calling_code) == option.code %}selected{% endif %}
-            >{{ option.flag }} {{ localized_name }} ({{ option.code }}) • {{ option.iso }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div class="local-number-wrapper">
-          <label for="mobile_number" class="form-label visually-hidden">{{ _('Local mobile number') }}</label>
-          <input
-            type="tel"
-            pattern="^[0-9 ]*$"
-            inputmode="numeric"
-            class="form-control auth-input"
-            id="mobile_number"
-            name="mobile_number"
-            value="{{ request.form.get('mobile_number', '') }}"
-            placeholder="{{ _('Local mobile number') }}"
-            required
-            aria-describedby="mobile_number_hint"
-          >
-          <div id="mobile_number_hint" class="form-text">{{ _('Digits and spaces only') }}</div>
-        </div>
-      </div>
+      <label for="mobile_number" class="form-label">{{ _('Mobile number') }}</label>
+      <input
+        type="tel"
+        pattern="^[0-9 +]*$"
+        inputmode="tel"
+        class="form-control auth-input"
+        id="mobile_number"
+        name="mobile_number"
+        value="{{ request.form.get('mobile_number', '') }}"
+        placeholder="{{ _('Enter your mobile number') }}"
+        required
+      >
     </div>
     <div class="mb-4">
       <label class="form-label visually-hidden" for="password">{{ _('Password') }}</label>
@@ -79,48 +44,5 @@
       <button type="submit" class="btn btn-primary auth-login-button">{{ _('Sign in') }}</button>
     </div>
   </form>
-  <script>
-    (() => {
-      const countryCodeSelect = document.getElementById('mobile_country_code');
-      const countryCodeSearch = document.getElementById('mobile_country_code_search');
-      if (!countryCodeSelect || !countryCodeSearch) {
-        return;
-      }
-
-      const allOptions = Array.from(countryCodeSelect.options);
-      const normalise = (value) => (value || '').toLowerCase();
-
-      countryCodeSearch.addEventListener('input', () => {
-        const query = normalise(countryCodeSearch.value.trim());
-        let firstVisibleOption = null;
-
-        allOptions.forEach((option) => {
-          const searchSpace = option.dataset.search || normalise(option.textContent);
-          const isVisible = !query || searchSpace.includes(query);
-          option.hidden = !isVisible;
-          if (isVisible && !firstVisibleOption) {
-            firstVisibleOption = option;
-          }
-        });
-
-        if (
-          firstVisibleOption &&
-          (countryCodeSelect.selectedOptions.length === 0 ||
-            countryCodeSelect.selectedOptions[0].hidden)
-        ) {
-          countryCodeSelect.value = firstVisibleOption.value;
-          countryCodeSelect.dispatchEvent(new Event('change', { bubbles: true }));
-        }
-      });
-
-      countryCodeSearch.addEventListener('focus', () => {
-        countryCodeSearch.select();
-      });
-
-      if (countryCodeSearch.value) {
-        countryCodeSearch.dispatchEvent(new Event('input'));
-      }
-    })();
-  </script>
 </div>
 {% endblock %}
