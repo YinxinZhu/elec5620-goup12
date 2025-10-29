@@ -96,11 +96,11 @@
                         </p>
                         {% endif %}
 
-                        <div class="d-flex justify-content-end gap-2">
-                            <!-- Variant -->
+                        <div class="d-flex justify-content-end gap-4">
+                            <!-- AI generate variant questions -->
                             <a class="btn btn-sm btn-outline-primary"
                                href="{{ url_for('student.variant', question=entry.question.id) }}">
-                                {{ _('Variant') }}
+                                {{ _('AI generate variant questions') }}
                             </a>
 
                             <!-- Remove (direct delete) -->
@@ -166,7 +166,15 @@
                         <p class="text-muted small mb-3">{{ _('Explanation') }}: {{ entry.question.explanation }}</p>
                         {% endif %}
 
-                        <div class="d-flex justify-content-end">
+                        <div class="d-flex justify-content-end gap-4 flex-wrap">
+                            <!-- AI generate variant questions -->
+                            <a
+                                class="btn btn-sm btn-outline-primary"
+                                href="{{ url_for('student.variant', question=entry.question.id) }}"
+                            >
+                                {{ _('AI generate variant questions') }}
+                            </a>
+                            <!-- Remove (direct delete) -->
                             <form method="post" action="{{ url_for('student.toggle_star', question_id=entry.question.id) }}">
                                 <input type="hidden" name="action" value="unstar">
                                 <input type="hidden" name="next" value="{{ request.full_path or request.path }}">

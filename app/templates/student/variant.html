@@ -26,8 +26,8 @@
 </style>
 <div class="d-flex flex-column flex-lg-row align-items-lg-center justify-content-between gap-3 mb-4">
   <div>
-    <h1 class="h3 mb-1">{{ _('Variant details') }}</h1>
-    <p class="text-muted mb-0">{{ _('Explore alternative questions covering the same knowledge point.') }}</p>
+    <h1 class="h3 mb-1">{{ _('Variant Question Details') }}</h1>
+    <p class="text-muted mb-0">{{ _('Explore variant questions covering the same knowledge point.') }}</p>
   </div>
   <a class="btn btn-outline-secondary" href="{{ url_for('student.variant_list') }}">{{ _('Back to variant list') }}</a>
 </div>
@@ -57,7 +57,7 @@
 {% if generation_mode %}
 <div class="card">
   <div class="card-body">
-    <h2 class="h5 mb-3">{{ _('Generate variant questions') }}</h2>
+    <h2 class="h5 mb-3">{{ _('Generate variant questions by AI') }}</h2>
     <p class="text-muted">{{ _('Select how many variants you need and let the AI draft them for you.') }}</p>
     <form
       id="variant-generate-form"
