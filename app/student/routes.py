@@ -629,6 +629,9 @@ def notebook():
         return (code or "").strip().upper()
 
     requested_state = _normalise(request.args.get("state"))
+    page = request.args.get("page", default=1, type=int) or 1
+    page = max(page, 1)
+    per_page = 10
 
     progress_records = (
         StudentStateProgress.query.with_entities(
@@ -660,14 +663,36 @@ def notebook():
     entries = []
     total_wrong = 0
     starred_entries: list[StarredQuestion] = []
+    total_entries = 0
+    total_pages = 1
     if selected_state:
-        notebook_query = (
+        base_query = (
             NotebookEntry.query.filter_by(student_id=student.id, state=selected_state)
             .join(NotebookEntry.question)
-            .order_by(NotebookEntry.last_wrong_at.desc().nullslast())
         )
-        entries = notebook_query.all()
-        total_wrong = sum(entry.wrong_count for entry in entries)
+
+        total_entries = base_query.count()
+        if total_entries:
+            total_pages = max(1, ceil(total_entries / per_page))
+            page = min(page, total_pages)
+        else:
+            page = 1
+            total_pages = 1
+
+        entries = (
+            base_query.order_by(NotebookEntry.last_wrong_at.desc().nullslast())
+            .limit(per_page)
+            .offset((page - 1) * per_page)
+            .all()
+        )
+
+        total_wrong = (
+            db.session.query(func.coalesce(func.sum(NotebookEntry.wrong_count), 0))
+            .filter_by(student_id=student.id, state=selected_state)
+            .scalar()
+            or 0
+        )
+        total_wrong = int(total_wrong)
 
         starred_query = (
             StarredQuestion.query.filter_by(student_id=student.id)
@@ -687,6 +712,10 @@ def notebook():
         entries=entries,
         total_wrong=total_wrong,
         starred_entries=starred_entries,
+        page=page,
+        total_pages=total_pages,
+        total_entries=total_entries,
+        per_page=per_page,
     )
 
 
