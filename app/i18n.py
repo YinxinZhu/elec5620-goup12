@@ -208,6 +208,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "Availability management": "可预约时间管理",
         "Add a new slot": "新增可预约时段",
         "Start time": "开始时间",
+        "yyyy/mm/dd": "yyyy/mm/日",
         "yyyy/mm/dd --:--": "yyyy/mm/日 --:--",
         "Duration": "时长",
         "30 minutes": "30 分钟",

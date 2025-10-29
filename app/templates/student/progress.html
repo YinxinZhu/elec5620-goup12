@@ -1,6 +1,11 @@
 {% extends "base.html" %}
 {% block title %}{{ _('Study progress') }} · {{ super() }}{% endblock %}
 
+{% block extra_head %}
+{{ super() }}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.css">
+{% endblock %}
+
 {% block content %}
 <div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3 mb-4">
   <div>
@@ -35,11 +40,27 @@
   </div>
   <div class="col-md-2">
     <label for="start" class="form-label">{{ _('Start date') }}</label>
-    <input id="start" name="start" type="date" class="form-control" value="{{ start_date.isoformat() if start_date }}">
+    <input
+      id="start"
+      name="start"
+      type="text"
+      class="form-control"
+      value="{{ start_date.isoformat() if start_date }}"
+      autocomplete="off"
+      data-placeholder="{{ 'yy/mm/dd' if active_language == 'ENGLISH' else _('yyyy/mm/dd') }}"
+    >
   </div>
   <div class="col-md-2">
     <label for="end" class="form-label">{{ _('End date') }}</label>
-    <input id="end" name="end" type="date" class="form-control" value="{{ end_date.isoformat() if end_date }}">
+    <input
+      id="end"
+      name="end"
+      type="text"
+      class="form-control"
+      value="{{ end_date.isoformat() if end_date }}"
+      autocomplete="off"
+      data-placeholder="{{ 'yy/mm/dd' if active_language == 'ENGLISH' else _('yyyy/mm/dd') }}"
+    >
   </div>
   <div class="col-md-2 d-flex gap-2">
     <button type="submit" class="btn btn-primary mt-auto">{{ _('Apply filters') }}</button>
@@ -274,4 +295,50 @@
 {% else %}
   <div class="alert alert-info" role="alert">{{ _('Switch to a state to load progress data.') }}</div>
 {% endif %}
+{% endblock %}
+
+{% block extra_scripts %}
+{{ super() }}
+<script src="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.js"></script>
+{% if active_language == 'CHINESE' %}
+<script src="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/l10n/zh.js"></script>
+{% endif %}
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    if (typeof flatpickr !== 'function') {
+      return;
+    }
+
+    var locale = '{{ "zh" if active_language == "CHINESE" else "en" }}';
+    ['start', 'end'].forEach(function (fieldId) {
+      var input = document.getElementById(fieldId);
+      if (!input) {
+        return;
+      }
+
+      var placeholder = input.dataset.placeholder || '';
+      var options = {
+        altInput: true,
+        altFormat: locale === 'en' ? 'y/m/d' : 'Y/m/d',
+        dateFormat: 'Y-m-d',
+        allowInput: true,
+        disableMobile: true
+      };
+
+      if (locale === 'en') {
+        options.locale = locale;
+      } else if (flatpickr.l10ns && flatpickr.l10ns[locale]) {
+        options.locale = flatpickr.l10ns[locale];
+      }
+
+      options.onReady = options.onValueUpdate = function (selectedDates, dateStr, instance) {
+        if (instance.altInput && placeholder) {
+          instance.altInput.placeholder = placeholder;
+        }
+      };
+
+      flatpickr(input, options);
+    });
+  });
+</script>
 {% endblock %}
