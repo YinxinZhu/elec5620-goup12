@@ -28,7 +28,16 @@
     </div>
     <div class="mb-3">
       <label for="student_email" class="form-label">{{ _('Email') }} <span class="text-muted">{{ _('(optional)') }}</span></label>
-      <input type="email" class="form-control" id="student_email" name="student_email" value="{{ request.form.get('student_email', '') }}" placeholder="name@example.com">
+      <input
+        type="email"
+        class="form-control"
+        id="student_email"
+        name="student_email"
+        value="{{ request.form.get('student_email', '') }}"
+        placeholder="name@example.com"
+        pattern="^[^@\s]+@[^@\s]+\.[^@\s]+$"
+        title="{{ _('Please enter a valid email address.') }}"
+      >
     </div>
     <div class="row g-3">
       <div class="col-sm-6">

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 import random
+import re
 from uuid import uuid4
 
 from flask import (
@@ -400,6 +401,10 @@ def register_student():
 
     if not name or not mobile_number or not password:
         flash("Name, mobile number, and password are required to register.", "danger")
+        return _render_form()
+
+    if email and not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email):
+        flash("Please enter a valid email address.", "danger")
         return _render_form()
 
     if password != confirm_password:
