@@ -90,11 +90,23 @@
                   <div class="text-muted small">{{ _('Explanation') }}: {{ q.explanation }}</div>
                   {% endif %}
                 </div>
-                {% if item.answer and item.answer.is_correct %}
-                <span class="badge bg-success">{{ _('Correct') }}</span>
-                {% else %}
-                <span class="badge bg-warning text-dark">{{ _('Review') }}</span>
-                {% endif %}
+                <div class="d-flex flex-column align-items-end gap-2">
+                  <form method="post" action="{{ url_for('student.toggle_star', question_id=q.id) }}">
+                    <input type="hidden" name="next" value="{{ request.full_path or request.path }}">
+                    {% if q.id in starred_ids %}
+                    <input type="hidden" name="action" value="unstar">
+                    <button type="submit" class="btn btn-sm btn-warning">⭐ {{ _('Remove from notebook') }}</button>
+                    {% else %}
+                    <input type="hidden" name="action" value="star">
+                    <button type="submit" class="btn btn-sm btn-outline-warning">☆ {{ _('Add to notebook') }}</button>
+                    {% endif %}
+                  </form>
+                  {% if item.answer and item.answer.is_correct %}
+                  <span class="badge bg-success">{{ _('Correct') }}</span>
+                  {% else %}
+                  <span class="badge bg-warning text-dark">{{ _('Review') }}</span>
+                  {% endif %}
+                </div>
               </div>
             </div>
             {% else %}
@@ -150,10 +162,22 @@
               <span class="badge bg-light text-dark me-2">{{ _('Question') }} {{ current_index + 1 }} / {{ total_questions }}</span>
               <span class="text-muted small">{{ _('Topic') }}: {{ current.question.topic }}</span>
             </div>
-            <form method="post" onsubmit="return confirm('{{ _('Submit the entire exam?') }}')">
-              <input type="hidden" name="action" value="submit_exam">
-              <button type="submit" class="btn btn-danger btn-sm">{{ _('Submit exam') }}</button>
-            </form>
+            <div class="d-flex align-items-start gap-2">
+              <form method="post" action="{{ url_for('student.toggle_star', question_id=current.question.id) }}">
+                <input type="hidden" name="next" value="{{ request.full_path or request.path }}">
+                {% if current.question.id in starred_ids %}
+                <input type="hidden" name="action" value="unstar">
+                <button type="submit" class="btn btn-sm btn-warning">⭐ {{ _('Remove from notebook') }}</button>
+                {% else %}
+                <input type="hidden" name="action" value="star">
+                <button type="submit" class="btn btn-sm btn-outline-warning">☆ {{ _('Add to notebook') }}</button>
+                {% endif %}
+              </form>
+              <form method="post" onsubmit="return confirm('{{ _('Submit the entire exam?') }}')">
+                <input type="hidden" name="action" value="submit_exam">
+                <button type="submit" class="btn btn-danger btn-sm">{{ _('Submit exam') }}</button>
+              </form>
+            </div>
           </div>
           <h2 class="h5 mb-4">{{ current.question.prompt }}</h2>
           <form method="post" class="question-form">

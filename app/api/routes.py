@@ -46,10 +46,7 @@ from ..services.state_management import (
     get_questions_for_state,
     switch_student_state,
 )
-from ..services.variant_generation import (
-    derive_knowledge_point,
-    generate_question_variants,
-)
+from ..services.variant_generation import generate_variants_with_metadata
 from . import api_bp
 
 PHONE_REGEX = re.compile(r"^\+?\d{8,15}$")
@@ -652,9 +649,11 @@ def generate_variants(question_id: int):
     count = max(1, min(count, MAX_VARIANTS_PER_REQUEST))
 
     # Generate drafts deterministically so follow-up requests are repeatable in QA.
-    variants = generate_question_variants(question, count=count)
-    # Knowledge point metadata summarises the underlying concept for the coach UI.
-    knowledge_name, knowledge_summary = derive_knowledge_point(question)
+    (
+        knowledge_name,
+        knowledge_summary,
+        variants,
+    ) = generate_variants_with_metadata(question, count=count)
 
     group = VariantQuestionGroup(
         student_id=student.id,
