@@ -1145,6 +1145,8 @@ def exam_session(session_id: int):
             navigate_to = int(request.form.get("navigate_to", current_index + 1))
         except ValueError:
             navigate_to = current_index + 1
+        if navigate_to < 1:
+            navigate_to = current_index + 1
         target_index = max(1, min(navigate_to, len(questions)))
         return redirect(url_for("student.exam_session", session_id=session_id, q=target_index))
 

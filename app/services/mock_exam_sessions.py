@@ -48,6 +48,19 @@ class SessionQuestion:
     position: int
     answer: StudentExamAnswer | None
 
+    def ordered_choices(self) -> list[tuple[str, str]]:
+        """Return the available answer options in A→D order."""
+        choices: list[tuple[str, str]] = []
+        for code in ("A", "B", "C", "D"):
+            value = getattr(self.question, f"option_{code.lower()}", None)
+            if value is None:
+                continue
+            text = value.strip()
+            if not text:
+                continue
+            choices.append((code, text))
+        return choices
+
 
 def _ensure_exam_rule(state: str) -> ExamRule:
     rule = ExamRule.query.filter_by(state=state).first()

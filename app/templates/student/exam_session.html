@@ -74,10 +74,9 @@
                   <h3 class="h6">{{ item.position }}. {{ q.prompt }}</h3>
                   <p class="text-muted small mb-2">{{ _('Topic') }}: {{ q.topic }}</p>
                   <ul class="list-unstyled mb-2 options-list">
-                    <li {% if q.correct_option == 'A' %}class="correct"{% endif %}><strong>A.</strong> {{ q.option_a }}</li>
-                    <li {% if q.correct_option == 'B' %}class="correct"{% endif %}><strong>B.</strong> {{ q.option_b }}</li>
-                    <li {% if q.correct_option == 'C' %}class="correct"{% endif %}><strong>C.</strong> {{ q.option_c }}</li>
-                    <li {% if q.correct_option == 'D' %}class="correct"{% endif %}><strong>D.</strong> {{ q.option_d }}</li>
+                    {% for option, option_text in item.ordered_choices() %}
+                    <li {% if q.correct_option == option %}class="correct"{% endif %}><strong>{{ option }}.</strong> {{ option_text }}</li>
+                    {% endfor %}
                   </ul>
                   <div class="alert {% if item.answer and item.answer.is_correct %}alert-success{% else %}alert-danger{% endif %} py-2">
                     {% if item.answer %}
@@ -152,7 +151,6 @@
   </div>
   {% else %}
   {% set current = questions[current_index] %}
-  {% set option_map = {'A': current.question.option_a, 'B': current.question.option_b, 'C': current.question.option_c, 'D': current.question.option_d} %}
   <div class="row g-4">
     <div class="col-lg-8">
       <div class="card shadow-sm">
@@ -184,8 +182,7 @@
             <input type="hidden" name="action" value="save_answer">
             <input type="hidden" name="question_id" value="{{ current.question.id }}">
             <div class="list-group mb-4">
-              {% for option in ['A', 'B', 'C', 'D'] %}
-              {% set option_text = option_map[option] %}
+              {% for option, option_text in current.ordered_choices() %}
               <label class="list-group-item list-group-item-action d-flex align-items-center">
                 <input class="form-check-input me-3" type="radio" name="selected_option" value="{{ option }}" {% if current.answer and current.answer.selected_option == option %}checked{% endif %}>
                 <div>
@@ -196,7 +193,7 @@
             </div>
             <div class="d-flex justify-content-between align-items-center">
               <div class="btn-group" role="group">
-                <button class="btn btn-outline-secondary" type="submit" name="navigate_to" value="{{ current_index }}">{{ _('Save & stay') }}</button>
+                <button class="btn btn-outline-secondary" type="submit" name="navigate_to" value="{{ current_index + 1 }}">{{ _('Save & stay') }}</button>
                 {% if current_index + 1 < total_questions %}
                 <button class="btn btn-primary" type="submit" name="navigate_to" value="{{ current_index + 2 }}">{{ _('Save & next') }}</button>
                 {% else %}
