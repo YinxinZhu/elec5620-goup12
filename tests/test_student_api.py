@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+
 import pytest
 
 from app import create_app, db
@@ -366,3 +368,62 @@ def test_variant_generation_flow(seeded_app, client):
 
     with seeded_app.app_context():
         assert VariantQuestionGroup.query.count() == 0
+
+
+def test_exam_session_save_and_stay_preserves_question(seeded_app, client):
+    with seeded_app.app_context():
+        student = Student(
+            name="Exam Taker",
+            email="exam@example.com",
+            mobile_number="0410000099",
+            state="NSW",
+            preferred_language="ENGLISH",
+        )
+        student.set_password("password123")
+        db.session.add(student)
+        paper = MockExamPaper.query.filter_by(state="NSW").first()
+        assert paper is not None
+        db.session.commit()
+        paper_id = paper.id
+
+    login_resp = client.post(
+        "/coach/login",
+        data={"mobile_number": "0410000099", "password": "password123"},
+        follow_redirects=True,
+    )
+    assert login_resp.status_code == 200
+
+    start_resp = client.post(f"/student/exams/start/{paper_id}", follow_redirects=False)
+    assert start_resp.status_code == 302
+    session_url = start_resp.headers["Location"]
+
+    second_page = client.get(f"{session_url}?q=2")
+    assert second_page.status_code == 200
+    second_html = second_page.data.decode("utf-8")
+    prompt_match = re.search(r'<h2 class="h5 mb-4">([^<]+)</h2>', second_html)
+    assert prompt_match is not None
+    second_prompt = prompt_match.group(1)
+    question_match = re.search(r'name="question_id" value="(\d+)"', second_html)
+    assert question_match is not None
+    question_id = question_match.group(1)
+
+    save_resp = client.post(
+        f"{session_url}?q=2",
+        data={
+            "action": "save_answer",
+            "question_id": question_id,
+            "selected_option": "A",
+            "navigate_to": "2",
+        },
+        follow_redirects=False,
+    )
+    assert save_resp.status_code == 302
+    redirect_url = save_resp.headers["Location"]
+    assert redirect_url.endswith("?q=2")
+
+    final_page = client.get(redirect_url)
+    assert final_page.status_code == 200
+    final_html = final_page.data.decode("utf-8")
+    final_prompt_match = re.search(r'<h2 class="h5 mb-4">([^<]+)</h2>', final_html)
+    assert final_prompt_match is not None
+    assert final_prompt_match.group(1) == second_prompt
