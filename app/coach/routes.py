@@ -681,7 +681,11 @@ def slots():
     slots = slot_query.all()
     coach_choices = []
     if current_user.is_admin:
-        coach_choices = Coach.query.order_by(Coach.name.asc()).all()
+        coach_choices = (
+            Coach.query.filter(~Coach.admin_profile.has())
+            .order_by(Coach.name.asc())
+            .all()
+        )
     return render_template("coach/slots.html", slots=slots, coach_choices=coach_choices)
 
 
