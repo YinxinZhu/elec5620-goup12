@@ -124,7 +124,8 @@
       altFormat: '{{ "Y/m/d H:i" if active_language == "ENGLISH" else "Y年/m月/d日 H:i" }}',
       minuteIncrement: 5,
       allowInput: true,
-      disableMobile: true
+      disableMobile: true,
+      minDate: new Date()
     };
     var locale = '{{ "zh" if active_language == "CHINESE" else "en" }}';
     if (locale === 'en') {

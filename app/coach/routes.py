@@ -656,6 +656,9 @@ def slots():
         if duration not in {30, 60}:
             flash("Duration must be either 30 or 60 minutes.", "warning")
             return redirect(url_for("coach.slots"))
+        if start_time < datetime.now():
+            flash("Start time cannot be in the past.", "warning")
+            return redirect(url_for("coach.slots"))
         location_text = request.form.get("location", "").strip()
         if not location_text:
             flash("Location is required", "warning")
