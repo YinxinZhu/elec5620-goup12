@@ -7,7 +7,7 @@ from datetime import datetime
 from sqlalchemy import func, or_
 
 from .. import db
-from ..i18n import ensure_language_code
+from ..i18n import DEFAULT_LANGUAGE, ensure_language_code
 from ..models import (
     Coach,
     ExamRule,
@@ -106,26 +106,39 @@ def switch_student_state(
 
 
 def get_questions_for_state(state_code: str, *, language: str | None = None) -> list[Question]:
-    """Return the deduplicated question bank for the given state."""
+    """Return the deduplicated question bank for the given state.
+
+    We always include the default-language bank to guarantee full coverage, then
+    layer any translated questions on top so that students see localised
+    content where available without losing access to the wider catalogue.
+    """
 
     state = _normalise_state_code(state_code)
     language_code = ensure_language_code(language)
-    questions = (
-        Question.query.filter(
-            or_(Question.state_scope == state, Question.state_scope == "ALL")
-        )
-        .filter(Question.language == language_code)
-        .order_by(Question.qid.asc())
-        .all()
+
+    base_query = Question.query.filter(
+        or_(Question.state_scope == state, Question.state_scope == "ALL")
+    ).order_by(Question.qid.asc())
+
+    default_questions = (
+        base_query.filter(Question.language == DEFAULT_LANGUAGE).all()
     )
 
-    deduped: dict[str, Question] = {}
-    for question in questions:
-        existing = deduped.get(question.qid)
-        if not existing or (
-            existing.state_scope == "ALL" and question.state_scope == state
-        ):
-            deduped[question.qid] = question
+    deduped: dict[str, Question] = {
+        question.qid: question for question in default_questions
+    }
+
+    if language_code != DEFAULT_LANGUAGE:
+        translated_questions = (
+            base_query.filter(Question.language == language_code).all()
+        )
+        for question in translated_questions:
+            existing = deduped.get(question.qid)
+            if not existing or existing.language == DEFAULT_LANGUAGE or (
+                existing.state_scope == "ALL" and question.state_scope == state
+            ):
+                deduped[question.qid] = question
+
     return list(deduped.values())
 
 

@@ -12,8 +12,16 @@ from app.models import (
     MockExamPaper,
     MockExamPaperQuestion,
     MockExamSummary,
+    NotebookEntry,
     Question,
+    QuestionAttempt,
+    StarredQuestion,
     Student,
+    StudentExamAnswer,
+    StudentExamSession,
+    StudentStateProgress,
+    VariantQuestion,
+    VariantQuestionGroup,
 )
 
 app = create_app()
@@ -68,7 +76,7 @@ def seed_demo() -> None:
             email="priya@example.com",
             state="NSW",
             mobile_number="0400000101",
-            preferred_language="ENGLISH",
+            preferred_language="CHINESE",
             coach=coach,
         ),
         Student(
@@ -142,6 +150,28 @@ def seed_demo() -> None:
             questions.append(question)
             questions_by_state.setdefault(state, []).append(question)
 
+    translated_questions: list[Question] = []
+    for state, state_questions in questions_by_state.items():
+        for original in state_questions[:10]:
+            scenario_number = original.qid.split("-")[-1]
+            translated_questions.append(
+                Question(
+                    qid=original.qid,
+                    prompt=f"{state} 场景 {scenario_number}：{original.topic.title()} 决策（中文）。",
+                    language="CHINESE",
+                    state_scope=original.state_scope,
+                    topic=original.topic,
+                    option_a=f"选项A：{original.option_a}",
+                    option_b=f"选项B：{original.option_b}",
+                    option_c=f"选项C：{original.option_c}",
+                    option_d=f"选项D：{original.option_d}",
+                    correct_option=original.correct_option,
+                    explanation=f"重点：保持{original.topic}技能。（中文提示）",
+                )
+            )
+
+    questions.extend(translated_questions)
+
     now = datetime.utcnow()
     slots = [
         AvailabilitySlot(
@@ -170,7 +200,6 @@ def seed_demo() -> None:
     db.session.add(coach)
     db.session.add(admin_coach)
     db.session.add_all(students)
-    db.session.add_all(summaries)
     db.session.add_all(exam_rules)
     db.session.add_all(questions)
     db.session.flush()
@@ -210,6 +239,196 @@ def seed_demo() -> None:
     db.session.add_all(paper_questions)
     db.session.add_all(slots)
     db.session.flush()
+
+    attempts: list[QuestionAttempt] = []
+    for offset, question in enumerate(questions_by_state["NSW"][:12], start=1):
+        attempted_at = now - timedelta(days=6 - (offset // 3))
+        is_correct = offset % 4 != 0
+        chosen_option = (
+            question.correct_option
+            if is_correct
+            else ("A" if question.correct_option != "A" else "B")
+        )
+        attempts.append(
+            QuestionAttempt(
+                student=students[0],
+                question=question,
+                state="NSW",
+                is_correct=is_correct,
+                chosen_option=chosen_option,
+                time_spent_seconds=45 + offset * 3,
+                attempted_at=attempted_at,
+            )
+        )
+
+    for offset, question in enumerate(questions_by_state["NSW"][5:15], start=1):
+        attempted_at = now - timedelta(days=offset % 5)
+        is_correct = offset % 2 == 1
+        chosen_option = (
+            question.correct_option
+            if is_correct
+            else ("C" if question.correct_option != "C" else "D")
+        )
+        attempts.append(
+            QuestionAttempt(
+                student=students[1],
+                question=question,
+                state="NSW",
+                is_correct=is_correct,
+                chosen_option=chosen_option,
+                time_spent_seconds=50 + offset * 2,
+                attempted_at=attempted_at,
+            )
+        )
+
+    for offset, question in enumerate(questions_by_state["VIC"][:8], start=1):
+        attempted_at = now - timedelta(days=offset % 4)
+        chosen_option = question.correct_option
+        attempts.append(
+            QuestionAttempt(
+                student=students[2],
+                question=question,
+                state="VIC",
+                is_correct=True,
+                chosen_option=chosen_option,
+                time_spent_seconds=55 + offset,
+                attempted_at=attempted_at,
+            )
+        )
+
+    notebook_entries = [
+        NotebookEntry(
+            student=students[0],
+            question=questions_by_state["NSW"][2],
+            state="NSW",
+            wrong_count=2,
+            last_wrong_at=now - timedelta(days=2),
+        ),
+        NotebookEntry(
+            student=students[0],
+            question=questions_by_state["NSW"][4],
+            state="NSW",
+            wrong_count=1,
+            last_wrong_at=now - timedelta(days=1),
+        ),
+        NotebookEntry(
+            student=students[1],
+            question=questions_by_state["NSW"][7],
+            state="NSW",
+            wrong_count=3,
+            last_wrong_at=now - timedelta(days=3),
+        ),
+    ]
+
+    progress_records = [
+        StudentStateProgress(
+            student=students[0],
+            state="NSW",
+            first_visited_at=now - timedelta(days=21),
+            last_active_at=now - timedelta(days=1),
+        ),
+        StudentStateProgress(
+            student=students[0],
+            state="VIC",
+            first_visited_at=now - timedelta(days=18),
+            last_active_at=now - timedelta(days=5),
+        ),
+        StudentStateProgress(
+            student=students[1],
+            state="NSW",
+            first_visited_at=now - timedelta(days=7),
+            last_active_at=now - timedelta(days=1),
+        ),
+    ]
+
+    variant_group = VariantQuestionGroup(
+        student=students[0],
+        base_question=questions_by_state["NSW"][0],
+        knowledge_point_name="Safe following distance",
+        knowledge_point_summary="记住两秒规则并根据天气调整距离。",
+        created_at=now - timedelta(days=3),
+    )
+
+    variant_questions = [
+        VariantQuestion(
+            group=variant_group,
+            student=students[0],
+            prompt="在雨天驾驶时保持怎样的安全跟车距离？",
+            option_a="保持至少两秒的时间间隔。",
+            option_b="维持一秒间隔即可。",
+            option_c="紧跟前车防止其他车辆插队。",
+            option_d="依赖 ABS 无需额外间隔。",
+            correct_option="A",
+            explanation="路面湿滑时延长跟车距离能够提供更多反应时间。",
+        ),
+        VariantQuestion(
+            group=variant_group,
+            student=students[0],
+            prompt="在高速路段保持安全跟车距离的最佳做法是什么？",
+            option_a="保持至少三秒间隔并根据速度调整。",
+            option_b="使用巡航控制接近前车。",
+            option_c="将注意力集中在后视镜上。",
+            option_d="频繁变道以保持车速。",
+            correct_option="A",
+            explanation="高速时需要更长距离来应对突发情况。",
+        ),
+    ]
+
+    starred = [
+        StarredQuestion(student=students[0], question=questions_by_state["NSW"][1]),
+        StarredQuestion(student=students[1], question=questions_by_state["NSW"][8]),
+    ]
+
+    session_attempt = StudentExamSession(
+        student=students[0],
+        state="NSW",
+        paper=paper_registry["NSW"][0],
+        status="submitted",
+        started_at=now - timedelta(days=4, hours=2),
+        finished_at=now - timedelta(days=4, hours=1, minutes=15),
+        expires_at=now - timedelta(days=4) + timedelta(hours=3),
+        score=40,
+        total_questions=STATE_EXAM_CONFIG["NSW"]["questions"],
+    )
+
+    exam_answers = []
+    for question in questions_by_state["NSW"][:5]:
+        exam_answers.append(
+            StudentExamAnswer(
+                session=session_attempt,
+                question=question,
+                selected_option=question.correct_option,
+                is_correct=True,
+                answered_at=session_attempt.started_at + timedelta(minutes=5),
+            )
+        )
+
+    summaries.extend(
+        [
+            MockExamSummary(
+                student=students[0],
+                state="NSW",
+                score=95,
+                taken_at=now - timedelta(days=3),
+            ),
+            MockExamSummary(
+                student=students[1],
+                state="NSW",
+                score=82,
+                taken_at=now - timedelta(days=2),
+            ),
+        ]
+    )
+
+    db.session.add_all(summaries)
+    db.session.add_all(attempts)
+    db.session.add_all(notebook_entries)
+    db.session.add_all(progress_records)
+    db.session.add(variant_group)
+    db.session.add_all(variant_questions)
+    db.session.add_all(starred)
+    db.session.add(session_attempt)
+    db.session.add_all(exam_answers)
 
     admin_entry = Admin(id=admin_coach.id)
     db.session.add(admin_entry)

@@ -377,6 +377,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "Never": "从未",
         "No wrong answers logged for the selected filters.": "所选条件下没有记录错题。",
         "Switch to a state to load progress data.": "请选择一个州以加载进度数据。",
+        "Select a valid state before exporting progress.": "导出前请选择有效的州。",
         "Wrong answer notebook": "错题笔记",
         "Revisit the questions you missed and plan targeted revisions.": "重温错题，制定针对性复习计划。",
         "Select a state to review your notebook.": "请选择州以查看错题笔记。",
