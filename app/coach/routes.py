@@ -7,6 +7,7 @@ from uuid import uuid4
 
 from flask import (
     Blueprint,
+    abort,
     flash,
     redirect,
     render_template,
@@ -1115,6 +1116,20 @@ def exams():
         selected_state=selected_state,
         language_codes=LANGUAGE_CODES,
     )
+
+
+@coach_bp.route("/questions/<int:question_id>")
+@login_required
+def question_detail(question_id: int):
+    question = db.session.get(Question, question_id)
+    if not question:
+        abort(404)
+
+    if not current_user.is_admin and question.state_scope not in {"ALL", current_user.state}:
+        flash("You do not have permission to view this question.", "danger")
+        return redirect(url_for("coach.exams"))
+
+    return render_template("coach/question_detail.html", question=question)
 def _parse_upload_headers(header_row: tuple) -> dict[int, str]:
     header_mapping = {
         "QID": "qid",

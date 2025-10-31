@@ -1,0 +1,76 @@
+{% extends 'base.html' %}
+{% block title %}{{ _('Question details') }}{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-xl-8">
+    <a class="btn btn-link ps-0 mb-3" href="{{ url_for('coach.exams') }}">&larr; {{ _('Back to exam management') }}</a>
+    <div class="card shadow-sm">
+      <div class="card-body">
+        <div class="d-flex flex-column flex-md-row justify-content-between align-items-start gap-3 mb-4">
+          <div>
+            <h1 class="h4 mb-1">{{ _('Question details') }}</h1>
+            <p class="text-muted mb-0">{{ _('Review the full prompt, options, and explanation for this question.') }}</p>
+          </div>
+          <div class="text-md-end">
+            <span class="badge bg-secondary text-uppercase">{{ question.topic }}</span>
+          </div>
+        </div>
+        <dl class="row small">
+          <dt class="col-sm-4 text-muted">{{ _('Question ID') }}</dt>
+          <dd class="col-sm-8">{{ question.qid }}</dd>
+          <dt class="col-sm-4 text-muted">{{ _('Language') }}</dt>
+          <dd class="col-sm-8">{{ language_name(question.language) }}</dd>
+          <dt class="col-sm-4 text-muted">{{ _('State scope') }}</dt>
+          <dd class="col-sm-8">
+            {% if question.state_scope == 'ALL' %}
+            {{ _('All states') }} ({{ question.state_scope }})
+            {% else %}
+            {{ question.state_scope }}
+            {% endif %}
+          </dd>
+          <dt class="col-sm-4 text-muted">{{ _('Topic') }}</dt>
+          <dd class="col-sm-8">{{ question.topic }}</dd>
+        </dl>
+        {% if question.image_url %}
+        <div class="mb-4">
+          <h2 class="h6 text-uppercase text-muted">{{ _('Question illustration') }}</h2>
+          <img src="{{ question.image_url }}" alt="{{ _('Question illustration') }}" class="img-fluid rounded border">
+        </div>
+        {% endif %}
+        <div class="mb-4">
+          <h2 class="h6 text-uppercase text-muted">{{ _('Prompt') }}</h2>
+          <p class="mb-0">{{ question.prompt }}</p>
+        </div>
+        <div class="mb-4">
+          <h2 class="h6 text-uppercase text-muted">{{ _('Answer options') }}</h2>
+          <div class="list-group">
+            {% set correct = question.correct_option %}
+            <div class="list-group-item {% if correct == 'A' %}list-group-item-success{% endif %}">
+              <strong>A.</strong> {{ question.option_a }}
+            </div>
+            <div class="list-group-item {% if correct == 'B' %}list-group-item-success{% endif %}">
+              <strong>B.</strong> {{ question.option_b }}
+            </div>
+            <div class="list-group-item {% if correct == 'C' %}list-group-item-success{% endif %}">
+              <strong>C.</strong> {{ question.option_c }}
+            </div>
+            <div class="list-group-item {% if correct == 'D' %}list-group-item-success{% endif %}">
+              <strong>D.</strong> {{ question.option_d }}
+            </div>
+          </div>
+        </div>
+        <div class="mb-4">
+          <h2 class="h6 text-uppercase text-muted">{{ _('Correct answer') }}</h2>
+          <p class="mb-0">{{ question.correct_option }}</p>
+        </div>
+        {% if question.explanation %}
+        <div>
+          <h2 class="h6 text-uppercase text-muted">{{ _('Explanation') }}</h2>
+          <p class="mb-0">{{ question.explanation }}</p>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

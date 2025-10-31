@@ -105,6 +105,17 @@
               <option value="{{ question.id }}">[{{ question.topic }}] {{ question.prompt[:80] }}{% if question.prompt|length > 80 %}…{% endif %}</option>
               {% endfor %}
             </select>
+            <div class="d-flex align-items-center gap-2 mt-2">
+              <a
+                class="btn btn-outline-secondary btn-sm disabled"
+                data-role="question-detail-link"
+                data-detail-url-base="{{ url_for('coach.question_detail', question_id=0).rsplit('/', 1)[0] }}"
+                target="_blank"
+                rel="noopener"
+                aria-disabled="true"
+              >{{ _('View selected question') }}</a>
+              <small class="text-muted">{{ _('Double-click a question to open details.') }}</small>
+            </div>
             <div class="form-text">{{ _('Questions outside the selected state are ignored automatically.') }}</div>
           </div>
           <div class="selection-auto d-none">
@@ -181,6 +192,33 @@
         }
       });
     });
+
+    const questionSelect = document.getElementById('question_ids');
+    const detailLink = document.querySelector('[data-role="question-detail-link"]');
+    if (questionSelect && detailLink) {
+      const base = detailLink.dataset.detailUrlBase || '';
+      const prefix = base.endsWith('/') ? base : `${base}/`;
+      const updateDetailLink = () => {
+        const selected = questionSelect.value;
+        if (selected) {
+          detailLink.classList.remove('disabled');
+          detailLink.setAttribute('aria-disabled', 'false');
+          detailLink.href = `${prefix}${selected}`;
+        } else {
+          detailLink.classList.add('disabled');
+          detailLink.setAttribute('aria-disabled', 'true');
+          detailLink.href = '#';
+        }
+      };
+
+      questionSelect.addEventListener('change', updateDetailLink);
+      questionSelect.addEventListener('dblclick', () => {
+        if (!detailLink.classList.contains('disabled') && detailLink.href) {
+          window.open(detailLink.href, '_blank', 'noopener=yes');
+        }
+      });
+      updateDetailLink();
+    }
   })();
 </script>
 {% endblock %}
