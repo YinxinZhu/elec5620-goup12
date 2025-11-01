@@ -29,8 +29,12 @@ class VariantGenerationAgent:
         self._settings = settings
         self._base_llm_kwargs = {
             "model": settings.openai_model,
-            "max_tokens": 2048,
         }
+        token_limit = 2048
+        if self._uses_responses_api(settings.openai_model):
+            self._base_llm_kwargs["max_completion_tokens"] = token_limit
+        else:
+            self._base_llm_kwargs["max_tokens"] = token_limit
         if settings.openai_temperature is not None:
             self._base_llm_kwargs["temperature"] = settings.openai_temperature
         self._base_llm_kwargs["openai_api_key"] = settings.openai_api_key
@@ -224,6 +228,21 @@ class VariantGenerationAgent:
             error_message = ""
         combined = f"{error_message} {exc}".lower()
         return "stream" in combined and ("verify" in combined or "unsupported" in combined)
+
+    @staticmethod
+    def _uses_responses_api(model_name: str) -> bool:
+        prefixes = (
+            "gpt-4.1",
+            "gpt-4o",
+            "gpt-5",
+            "chatgpt-4o",
+            "o1",
+            "o3",
+            "o4",
+            "o-mini",
+        )
+        normalized = (model_name or "").lower()
+        return normalized.startswith(prefixes)
 
 
 # Convert dict payload into the typed VariantResponse model.
