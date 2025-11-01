@@ -14,38 +14,36 @@
   <p class="text-muted small">{{ _('Sessions with coach {name}.').format(name=assigned_coach.name) }}</p>
   {% if available_slots %}
   {% set next_slot = available_slots[0] %}
-  <div class="card border-0 shadow-sm mb-3">
-    <div class="card-body">
-      <div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3">
-        <div>
-          <h3 class="h6 text-primary mb-1">{{ _('Next available session') }}</h3>
-          <p class="mb-1 fw-semibold">{{ next_slot.start_time.strftime('%d %b %Y %H:%M') }}</p>
-          <p class="text-muted small mb-0">{{ next_slot.duration_minutes }} {{ _('minutes') }} · {{ next_slot.location_text }}</p>
-        </div>
-        <form method="post" action="{{ url_for('student.book_slot', slot_id=next_slot.id) }}" class="w-100 w-md-auto">
-          <button class="btn btn-primary w-100" type="submit">{{ _('Book this session') }}</button>
-        </form>
+  <div class="card border-0 shadow-sm mb-4">
+    <div class="card-body d-flex flex-column flex-md-row align-items-md-center justify-content-between">
+      <div class="mb-3 mb-md-0">
+        <p class="text-muted small mb-1">{{ _('Next available session') }}</p>
+        <h3 class="h5 mb-1">{{ next_slot.start_time.strftime('%d %b %Y %H:%M') }}</h3>
+        <p class="text-muted mb-0">{{ next_slot.duration_minutes }} {{ _('minutes') }} · {{ next_slot.location_text }}</p>
       </div>
+      <form method="post" action="{{ url_for('student.book_slot', slot_id=next_slot.id) }}" class="w-100 w-md-auto">
+        <button class="btn btn-primary btn-lg w-100" type="submit">{{ _('Book this session') }}</button>
+      </form>
     </div>
   </div>
   {% if available_slots|length > 1 %}
   <div class="card border-0 shadow-sm">
-    <div class="card-header bg-white">
-      <h3 class="h6 mb-0">{{ _('Other available times') }}</h3>
+    <div class="card-body">
+      <h3 class="h6 mb-3">{{ _('Other available times') }}</h3>
+      <ul class="list-unstyled mb-0">
+        {% for slot in available_slots[1:] %}
+        <li class="d-flex flex-column flex-sm-row align-items-sm-center justify-content-between py-2 border-top">
+          <div class="mb-2 mb-sm-0">
+            <strong>{{ slot.start_time.strftime('%d %b %Y %H:%M') }}</strong>
+            <span class="text-muted small">· {{ slot.duration_minutes }} {{ _('minutes') }} · {{ slot.location_text }}</span>
+          </div>
+          <form method="post" action="{{ url_for('student.book_slot', slot_id=slot.id) }}">
+            <button class="btn btn-outline-primary btn-sm" type="submit">{{ _('Book') }}</button>
+          </form>
+        </li>
+        {% endfor %}
+      </ul>
     </div>
-    <ul class="list-group list-group-flush">
-      {% for slot in available_slots[1:] %}
-      <li class="list-group-item d-flex flex-column flex-lg-row align-items-lg-center justify-content-between gap-3">
-        <div>
-          <p class="mb-1 fw-semibold">{{ slot.start_time.strftime('%d %b %Y %H:%M') }}</p>
-          <p class="text-muted small mb-0">{{ slot.duration_minutes }} {{ _('minutes') }} · {{ slot.location_text }}</p>
-        </div>
-        <form method="post" action="{{ url_for('student.book_slot', slot_id=slot.id) }}" class="w-100 w-lg-auto">
-          <button class="btn btn-outline-primary w-100" type="submit">{{ _('Book') }}</button>
-        </form>
-      </li>
-      {% endfor %}
-    </ul>
   </div>
   {% endif %}
   {% else %}
