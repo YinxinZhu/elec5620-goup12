@@ -139,7 +139,7 @@
                 <div
                   class="d-flex flex-column flex-md-row justify-content-md-between align-items-md-center gap-2 mt-3"
                   data-role="available-pagination"
-                  data-status-template="{{ _('Showing {start}-{end} of {total} questions') }}"
+                  data-status-template="{{ _('Showing {start}-{finish} of {total} questions') }}"
                   data-empty-text="{{ _('No questions available') }}"
                 >
                   <div class="small text-muted" data-role="pagination-status"></div>
@@ -159,7 +159,7 @@
                 <div
                   class="d-flex flex-column flex-md-row justify-content-md-between align-items-md-center gap-2 mt-3"
                   data-role="selected-pagination"
-                  data-status-template="{{ _('Showing {start}-{end} of {total} questions') }}"
+                  data-status-template="{{ _('Showing {start}-{finish} of {total} questions') }}"
                   data-empty-text="{{ _('No questions selected') }}"
                 >
                   <div class="small text-muted" data-role="pagination-status"></div>
@@ -283,17 +283,17 @@
         if (!selectedPaginationStatus || !selectedPagination) {
           return;
         }
-        const template = selectedPagination.dataset.statusTemplate || 'Showing {start}-{end} of {total} questions';
+        const template = selectedPagination.dataset.statusTemplate || 'Showing {start}-{finish} of {total} questions';
         const emptyText = selectedPagination.dataset.emptyText || 'No questions selected';
         if (total === 0) {
           selectedPaginationStatus.textContent = emptyText;
           return;
         }
         const start = (selectedCurrentPage - 1) * selectedPageSize + 1;
-        const end = Math.min(selectedCurrentPage * selectedPageSize, total);
+        const finish = Math.min(selectedCurrentPage * selectedPageSize, total);
         selectedPaginationStatus.textContent = template
           .replace('{start}', start)
-          .replace('{end}', end)
+          .replace('{finish}', finish)
           .replace('{total}', total);
       };
 
@@ -345,17 +345,17 @@
           return;
         }
         const total = availableItems.length;
-        const template = pagination.dataset.statusTemplate || 'Showing {start}-{end} of {total} questions';
+        const template = pagination.dataset.statusTemplate || 'Showing {start}-{finish} of {total} questions';
         const emptyText = pagination.dataset.emptyText || 'No questions available';
         if (total === 0) {
           paginationStatus.textContent = emptyText;
           return;
         }
         const start = (currentPage - 1) * pageSize + 1;
-        const end = Math.min(currentPage * pageSize, total);
+        const finish = Math.min(currentPage * pageSize, total);
         paginationStatus.textContent = template
           .replace('{start}', start)
-          .replace('{end}', end)
+          .replace('{finish}', finish)
           .replace('{total}', total);
       };
 

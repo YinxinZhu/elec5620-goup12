@@ -189,6 +189,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "Choose a published paper or continue an in-progress exam.": "选择已发布的试卷或继续进行中的考试。",
         "Showing exam papers for state {state_code}. Questions marked \"ALL\" are shared nationally.": "当前展示 {state_code} 州的试卷，标记为“ALL”的题目为全国共享。",
         "Showing exam papers for state {state_code}. Questions marked ": "正在显示 {state_code} 州的试卷，标记为 ",
+        "Showing {start}-{finish} of {total} questions": "显示第 {start}-{finish} 题，共 {total} 题",
         "Exam in progress": "考试进行中",
         "Active session": "进行中的考试",
         "Paper ID": "试卷编号",
