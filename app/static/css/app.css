@@ -185,6 +185,11 @@ body {
   border-color: #0d6efd;
 }
 
+.request-action-card {
+  max-width: 320px;
+  width: 100%;
+}
+
 .options-list li.correct {
   background-color: #edf7ed;
   border-radius: 0.5rem;
