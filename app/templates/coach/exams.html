@@ -275,6 +275,8 @@
           const totalPages = Math.max(1, Math.ceil(availableItems.length / pageSize));
           nextPageButton.disabled = currentPage >= totalPages || availableItems.length === 0;
         }
+        selectedItem.remove();
+        updateState();
       };
 
       const showPage = (page) => {
