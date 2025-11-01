@@ -43,11 +43,25 @@
                 <td>{{ paper.time_limit_minutes }}</td>
                 <td>{{ paper.questions|length }}</td>
                 <td class="text-end">
-                  <form method="post" onsubmit="return confirm('{{ _('Delete this paper?') }}')">
-                    <input type="hidden" name="action" value="delete_exam">
-                    <input type="hidden" name="paper_id" value="{{ paper.id }}">
-                    <button type="submit" class="btn btn-outline-danger btn-sm">{{ _('Delete') }}</button>
-                  </form>
+                  <div class="d-flex justify-content-end gap-2">
+                    <a
+                      class="btn btn-outline-secondary btn-sm"
+                      href="{{ url_for('coach.exam_detail', paper_id=paper.id) }}"
+                      target="_blank"
+                      rel="noopener"
+                    >
+                      {{ _('View details') }}
+                    </a>
+                    <form
+                      method="post"
+                      class="m-0"
+                      onsubmit="return confirm('{{ _('Delete this paper?') }}')"
+                    >
+                      <input type="hidden" name="action" value="delete_exam">
+                      <input type="hidden" name="paper_id" value="{{ paper.id }}">
+                      <button type="submit" class="btn btn-outline-danger btn-sm">{{ _('Delete') }}</button>
+                    </form>
+                  </div>
                 </td>
               </tr>
               {% else %}

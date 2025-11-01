@@ -18,6 +18,7 @@ from flask import (
 from flask_login import current_user, login_required, login_user, logout_user
 from sqlalchemy import or_
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import joinedload
 from urllib.parse import urljoin, urlparse
 
 from .. import db
@@ -1120,6 +1121,32 @@ def exams():
         state_choices=STATE_CHOICES,
         selected_state=selected_state,
         language_codes=LANGUAGE_CODES,
+    )
+
+
+@coach_bp.route("/exams/<int:paper_id>")
+@login_required
+def exam_detail(paper_id: int):
+    paper = (
+        MockExamPaper.query.options(
+            joinedload(MockExamPaper.questions).joinedload(MockExamPaperQuestion.question)
+        )
+        .filter_by(id=paper_id)
+        .first()
+    )
+    if not paper:
+        abort(404)
+
+    if not current_user.is_admin and paper.state != current_user.state:
+        flash("You do not have permission to view this paper.", "danger")
+        return redirect(url_for("coach.exams"))
+
+    ordered_questions = sorted(paper.questions, key=lambda item: item.position)
+
+    return render_template(
+        "coach/exam_detail.html",
+        paper=paper,
+        paper_questions=ordered_questions,
     )
 
 
