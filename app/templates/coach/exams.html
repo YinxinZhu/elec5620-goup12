@@ -122,6 +122,18 @@
                   </div>
                   {% endfor %}
                 </div>
+                <div
+                  class="d-flex flex-column flex-md-row justify-content-md-between align-items-md-center gap-2 mt-3"
+                  data-role="available-pagination"
+                  data-status-template="{{ _('Showing {start}-{end} of {total} questions') }}"
+                  data-empty-text="{{ _('No questions available') }}"
+                >
+                  <div class="small text-muted" data-role="pagination-status"></div>
+                  <div class="btn-group btn-group-sm" role="group">
+                    <button type="button" class="btn btn-outline-secondary" data-action="prev-page">{{ _('Previous') }}</button>
+                    <button type="button" class="btn btn-outline-secondary" data-action="next-page">{{ _('Next') }}</button>
+                  </div>
+                </div>
                 <div class="form-text mt-2">{{ _('Use the plus button to add questions to the paper. Use the minus button to remove them.') }}</div>
                 <div class="form-text">{{ _('Questions outside the selected state are ignored automatically.') }}</div>
               </div>
@@ -213,12 +225,91 @@
     const selectedList = document.querySelector('[data-role="selected-questions"]');
     const selectedInput = document.getElementById('selected_question_ids');
     if (availableList && selectedList && selectedInput) {
+      const pagination = document.querySelector('[data-role="available-pagination"]');
+      const paginationStatus = pagination ? pagination.querySelector('[data-role="pagination-status"]') : null;
+      const prevPageButton = pagination ? pagination.querySelector('button[data-action="prev-page"]') : null;
+      const nextPageButton = pagination ? pagination.querySelector('button[data-action="next-page"]') : null;
+      const availableItems = Array.from(availableList.querySelectorAll('[data-question-id]'));
+      const pageSize = 10;
+      let currentPage = 1;
+
       const emptyState = selectedList.querySelector('[data-role="empty-state"]');
       const removeLabel = selectedList.dataset.removeLabel || 'Remove question';
       const viewLabel = selectedList.dataset.viewLabel || 'View details';
 
       const getSelectedItems = () =>
         Array.from(selectedList.querySelectorAll('[data-selected-item="true"]'));
+
+      const updatePaginationStatus = () => {
+        if (!paginationStatus || !pagination) {
+          return;
+        }
+        const total = availableItems.length;
+        const template = pagination.dataset.statusTemplate || 'Showing {start}-{end} of {total} questions';
+        const emptyText = pagination.dataset.emptyText || 'No questions available';
+        if (total === 0) {
+          paginationStatus.textContent = emptyText;
+          return;
+        }
+        const start = (currentPage - 1) * pageSize + 1;
+        const end = Math.min(currentPage * pageSize, total);
+        paginationStatus.textContent = template
+          .replace('{start}', start)
+          .replace('{end}', end)
+          .replace('{total}', total);
+      };
+
+      const applyPaginationVisibility = () => {
+        if (!pagination) {
+          return;
+        }
+        if (availableItems.length === 0) {
+          pagination.classList.remove('d-none');
+        } else {
+          pagination.classList.toggle('d-none', availableItems.length <= pageSize);
+        }
+        if (prevPageButton) {
+          prevPageButton.disabled = currentPage <= 1 || availableItems.length === 0;
+        }
+        if (nextPageButton) {
+          const totalPages = Math.max(1, Math.ceil(availableItems.length / pageSize));
+          nextPageButton.disabled = currentPage >= totalPages || availableItems.length === 0;
+        }
+        selectedItem.remove();
+        updateState();
+      };
+
+      const showPage = (page) => {
+        const totalPages = Math.max(1, Math.ceil(availableItems.length / pageSize));
+        currentPage = Math.min(Math.max(page, 1), totalPages);
+        availableItems.forEach((item, index) => {
+          if (availableItems.length > pageSize) {
+            const itemPage = Math.floor(index / pageSize) + 1;
+            item.classList.toggle('d-none', itemPage !== currentPage);
+          } else {
+            item.classList.remove('d-none');
+          }
+        });
+        applyPaginationVisibility();
+        updatePaginationStatus();
+      };
+
+      if (prevPageButton) {
+        prevPageButton.addEventListener('click', () => {
+          if (currentPage > 1) {
+            showPage(currentPage - 1);
+          }
+        });
+      }
+
+      if (nextPageButton) {
+        nextPageButton.addEventListener('click', () => {
+          const totalPages = Math.max(1, Math.ceil(availableItems.length / pageSize));
+          if (currentPage < totalPages) {
+            showPage(currentPage + 1);
+          }
+        });
+      }
 
       const updateState = () => {
         const items = getSelectedItems();
@@ -340,6 +431,7 @@
         updateState();
       });
 
+      showPage(1);
       updateState();
     }
   })();
