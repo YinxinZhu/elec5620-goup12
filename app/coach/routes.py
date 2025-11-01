@@ -18,6 +18,7 @@ from flask import (
 from flask_login import current_user, login_required, login_user, logout_user
 from sqlalchemy import or_
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import joinedload
 from urllib.parse import urljoin, urlparse
 
 from .. import db
@@ -1001,22 +1002,27 @@ def _handle_exam_creation_action() -> None:
 
     selected_questions: list[Question] = []
     if selection_mode == "manual":
+        raw_ids = (request.form.get("selected_question_ids") or "").split(",")
         question_ids: list[int] = []
-        for raw_id in request.form.getlist("question_ids"):
+        for raw_id in raw_ids:
+            raw_value = raw_id.strip()
+            if not raw_value:
+                continue
             try:
-                question_ids.append(int(raw_id))
+                question_id = int(raw_value)
             except (TypeError, ValueError):
                 continue
+            if question_id not in question_ids:
+                question_ids.append(question_id)
         if not question_ids:
             flash("Select at least one question for the paper.", "warning")
             return
-        questions = Question.query.filter(Question.id.in_(question_ids)).all()
+        query = _question_base_query(state if state != "ALL" else None)
+        questions = query.filter(Question.id.in_(question_ids)).all()
         lookup = {question.id: question for question in questions}
         for qid in question_ids:
             question = lookup.get(qid)
             if not question:
-                continue
-            if question.state_scope not in {"ALL", state}:
                 continue
             selected_questions.append(question)
         if not selected_questions:
@@ -1115,6 +1121,32 @@ def exams():
         state_choices=STATE_CHOICES,
         selected_state=selected_state,
         language_codes=LANGUAGE_CODES,
+    )
+
+
+@coach_bp.route("/exams/<int:paper_id>")
+@login_required
+def exam_detail(paper_id: int):
+    paper = (
+        MockExamPaper.query.options(
+            joinedload(MockExamPaper.questions).joinedload(MockExamPaperQuestion.question)
+        )
+        .filter_by(id=paper_id)
+        .first()
+    )
+    if not paper:
+        abort(404)
+
+    if not current_user.is_admin and paper.state != current_user.state:
+        flash("You do not have permission to view this paper.", "danger")
+        return redirect(url_for("coach.exams"))
+
+    ordered_questions = sorted(paper.questions, key=lambda item: item.position)
+
+    return render_template(
+        "coach/exam_detail.html",
+        paper=paper,
+        paper_questions=ordered_questions,
     )
 
 

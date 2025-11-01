@@ -43,11 +43,25 @@
                 <td>{{ paper.time_limit_minutes }}</td>
                 <td>{{ paper.questions|length }}</td>
                 <td class="text-end">
-                  <form method="post" onsubmit="return confirm('{{ _('Delete this paper?') }}')">
-                    <input type="hidden" name="action" value="delete_exam">
-                    <input type="hidden" name="paper_id" value="{{ paper.id }}">
-                    <button type="submit" class="btn btn-outline-danger btn-sm">{{ _('Delete') }}</button>
-                  </form>
+                  <div class="d-flex justify-content-end gap-2">
+                    <a
+                      class="btn btn-outline-secondary btn-sm"
+                      href="{{ url_for('coach.exam_detail', paper_id=paper.id) }}"
+                      target="_blank"
+                      rel="noopener"
+                    >
+                      {{ _('View details') }}
+                    </a>
+                    <form
+                      method="post"
+                      class="m-0"
+                      onsubmit="return confirm('{{ _('Delete this paper?') }}')"
+                    >
+                      <input type="hidden" name="action" value="delete_exam">
+                      <input type="hidden" name="paper_id" value="{{ paper.id }}">
+                      <button type="submit" class="btn btn-outline-danger btn-sm">{{ _('Delete') }}</button>
+                    </form>
+                  </div>
                 </td>
               </tr>
               {% else %}
@@ -99,24 +113,64 @@
             </div>
           </div>
           <div class="selection-manual">
-            <label class="form-label" for="question_ids">{{ _('Choose questions (hold Ctrl/⌘ to multi-select)') }}</label>
-            <select class="form-select" id="question_ids" name="question_ids" multiple size="8">
-              {% for question in available_questions %}
-              <option value="{{ question.id }}">[{{ question.topic }}] {{ question.prompt[:80] }}{% if question.prompt|length > 80 %}…{% endif %}</option>
-              {% endfor %}
-            </select>
-            <div class="d-flex align-items-center gap-2 mt-2">
-              <a
-                class="btn btn-outline-secondary btn-sm disabled"
-                data-role="question-detail-link"
-                data-detail-url-base="{{ url_for('coach.question_detail', question_id=0).rsplit('/', 1)[0] }}"
-                target="_blank"
-                rel="noopener"
-                aria-disabled="true"
-              >{{ _('View selected question') }}</a>
-              <small class="text-muted">{{ _('Double-click a question to open details.') }}</small>
+            <div class="row g-3">
+              <div class="col-lg-7">
+                <label class="form-label" for="available-questions">{{ _('Available questions') }}</label>
+                <div class="list-group" id="available-questions" data-role="available-questions">
+                  {% for question in available_questions %}
+                  {% set summary = '[' ~ question.topic ~ '] ' ~ question.prompt[:80] ~ ('…' if question.prompt|length > 80 else '') %}
+                  <div
+                    class="list-group-item d-flex align-items-start justify-content-between gap-3"
+                    data-question-id="{{ question.id }}"
+                    data-question-summary="{{ summary|e }}"
+                    data-detail-url="{{ url_for('coach.question_detail', question_id=question.id) }}"
+                  >
+                    <div class="me-auto">
+                      <div class="small">{{ summary }}</div>
+                      <a class="small" href="{{ url_for('coach.question_detail', question_id=question.id) }}" target="_blank" rel="noopener">{{ _('View details') }}</a>
+                    </div>
+                    <div class="btn-group btn-group-sm flex-shrink-0" role="group" aria-label="{{ _('Add or remove question') }}">
+                      <button type="button" class="btn btn-outline-success" data-action="add" aria-label="{{ _('Add question') }}">&plus;</button>
+                      <button type="button" class="btn btn-outline-danger" data-action="remove" aria-label="{{ _('Remove question') }}">&minus;</button>
+                    </div>
+                  </div>
+                  {% endfor %}
+                </div>
+                <div
+                  class="d-flex flex-column flex-md-row justify-content-md-between align-items-md-center gap-2 mt-3"
+                  data-role="available-pagination"
+                  data-status-template="{{ _('Showing {start}-{finish} of {total} questions') }}"
+                  data-empty-text="{{ _('No questions available') }}"
+                >
+                  <div class="small text-muted" data-role="pagination-status"></div>
+                  <div class="btn-group btn-group-sm" role="group">
+                    <button type="button" class="btn btn-outline-secondary" data-action="prev-page">{{ _('Previous') }}</button>
+                    <button type="button" class="btn btn-outline-secondary" data-action="next-page">{{ _('Next') }}</button>
+                  </div>
+                </div>
+                <div class="form-text mt-2">{{ _('Use the plus button to add questions to the paper. Use the minus button to remove them.') }}</div>
+                <div class="form-text">{{ _('Questions outside the selected state are ignored automatically.') }}</div>
+              </div>
+              <div class="col-lg-5">
+                <label class="form-label" for="selected-questions">{{ _('Selected questions') }}</label>
+                <div class="list-group min-vh-25" id="selected-questions" data-role="selected-questions" data-remove-label="{{ _('Remove question') }}" data-view-label="{{ _('View details') }}">
+                  <div class="list-group-item text-muted small" data-role="empty-state">{{ _('No questions selected yet.') }}</div>
+                </div>
+                <div
+                  class="d-flex flex-column flex-md-row justify-content-md-between align-items-md-center gap-2 mt-3"
+                  data-role="selected-pagination"
+                  data-status-template="{{ _('Showing {start}-{finish} of {total} questions') }}"
+                  data-empty-text="{{ _('No questions selected') }}"
+                >
+                  <div class="small text-muted" data-role="pagination-status"></div>
+                  <div class="btn-group btn-group-sm" role="group">
+                    <button type="button" class="btn btn-outline-secondary" data-action="prev-page">{{ _('Previous') }}</button>
+                    <button type="button" class="btn btn-outline-secondary" data-action="next-page">{{ _('Next') }}</button>
+                  </div>
+                </div>
+              </div>
             </div>
-            <div class="form-text">{{ _('Questions outside the selected state are ignored automatically.') }}</div>
+            <input type="hidden" id="selected_question_ids" name="selected_question_ids">
           </div>
           <div class="selection-auto d-none">
             <div class="row g-3">
@@ -193,31 +247,316 @@
       });
     });
 
-    const questionSelect = document.getElementById('question_ids');
-    const detailLink = document.querySelector('[data-role="question-detail-link"]');
-    if (questionSelect && detailLink) {
-      const base = detailLink.dataset.detailUrlBase || '';
-      const prefix = base.endsWith('/') ? base : `${base}/`;
-      const updateDetailLink = () => {
-        const selected = questionSelect.value;
-        if (selected) {
-          detailLink.classList.remove('disabled');
-          detailLink.setAttribute('aria-disabled', 'false');
-          detailLink.href = `${prefix}${selected}`;
+    const availableList = document.querySelector('[data-role="available-questions"]');
+    const selectedList = document.querySelector('[data-role="selected-questions"]');
+    const selectedInput = document.getElementById('selected_question_ids');
+    if (availableList && selectedList && selectedInput) {
+      const pagination = document.querySelector('[data-role="available-pagination"]');
+      const paginationStatus = pagination ? pagination.querySelector('[data-role="pagination-status"]') : null;
+      const prevPageButton = pagination ? pagination.querySelector('button[data-action="prev-page"]') : null;
+      const nextPageButton = pagination ? pagination.querySelector('button[data-action="next-page"]') : null;
+      const availableItems = Array.from(availableList.querySelectorAll('[data-question-id]'));
+      const pageSize = 10;
+      let currentPage = 1;
+
+      const emptyState = selectedList.querySelector('[data-role="empty-state"]');
+      const removeLabel = selectedList.dataset.removeLabel || 'Remove question';
+      const viewLabel = selectedList.dataset.viewLabel || 'View details';
+
+      const getSelectedItems = () =>
+        Array.from(selectedList.querySelectorAll('[data-selected-item="true"]'));
+
+      const selectedPagination = document.querySelector('[data-role="selected-pagination"]');
+      const selectedPaginationStatus = selectedPagination
+        ? selectedPagination.querySelector('[data-role="pagination-status"]')
+        : null;
+      const selectedPrevButton = selectedPagination
+        ? selectedPagination.querySelector('button[data-action="prev-page"]')
+        : null;
+      const selectedNextButton = selectedPagination
+        ? selectedPagination.querySelector('button[data-action="next-page"]')
+        : null;
+      const selectedPageSize = 10;
+      let selectedCurrentPage = 1;
+
+      const updateSelectedPaginationStatus = (total) => {
+        if (!selectedPaginationStatus || !selectedPagination) {
+          return;
+        }
+        const template = selectedPagination.dataset.statusTemplate || 'Showing {start}-{finish} of {total} questions';
+        const emptyText = selectedPagination.dataset.emptyText || 'No questions selected';
+        if (total === 0) {
+          selectedPaginationStatus.textContent = emptyText;
+          return;
+        }
+        const start = (selectedCurrentPage - 1) * selectedPageSize + 1;
+        const finish = Math.min(selectedCurrentPage * selectedPageSize, total);
+        selectedPaginationStatus.textContent = template
+          .replace('{start}', start)
+          .replace('{finish}', finish)
+          .replace('{total}', total);
+      };
+
+      const showSelectedPage = (page) => {
+        const items = getSelectedItems();
+        const total = items.length;
+
+        if (!selectedPagination) {
+          items.forEach((item) => item.classList.remove('d-none'));
+          return;
+        }
+
+        if (total === 0) {
+          selectedCurrentPage = 1;
         } else {
-          detailLink.classList.add('disabled');
-          detailLink.setAttribute('aria-disabled', 'true');
-          detailLink.href = '#';
+          const totalPages = Math.ceil(total / selectedPageSize);
+          selectedCurrentPage = Math.min(Math.max(page, 1), totalPages);
+        }
+
+        items.forEach((item, index) => {
+          if (total > selectedPageSize) {
+            const itemPage = Math.floor(index / selectedPageSize) + 1;
+            item.classList.toggle('d-none', itemPage !== selectedCurrentPage);
+          } else {
+            item.classList.remove('d-none');
+          }
+        });
+
+        if (total === 0) {
+          selectedPagination.classList.remove('d-none');
+        } else {
+          selectedPagination.classList.toggle('d-none', total <= selectedPageSize);
+        }
+
+        if (selectedPrevButton) {
+          selectedPrevButton.disabled = selectedCurrentPage <= 1 || total === 0;
+        }
+
+        if (selectedNextButton) {
+          const totalPages = total === 0 ? 1 : Math.ceil(total / selectedPageSize);
+          selectedNextButton.disabled = selectedCurrentPage >= totalPages || total === 0;
+        }
+
+        updateSelectedPaginationStatus(total);
+      };
+
+      const updatePaginationStatus = () => {
+        if (!paginationStatus || !pagination) {
+          return;
+        }
+        const total = availableItems.length;
+        const template = pagination.dataset.statusTemplate || 'Showing {start}-{finish} of {total} questions';
+        const emptyText = pagination.dataset.emptyText || 'No questions available';
+        if (total === 0) {
+          paginationStatus.textContent = emptyText;
+          return;
+        }
+        const start = (currentPage - 1) * pageSize + 1;
+        const finish = Math.min(currentPage * pageSize, total);
+        paginationStatus.textContent = template
+          .replace('{start}', start)
+          .replace('{finish}', finish)
+          .replace('{total}', total);
+      };
+
+      const applyPaginationVisibility = () => {
+        if (!pagination) {
+          return;
+        }
+        if (availableItems.length === 0) {
+          pagination.classList.remove('d-none');
+        } else {
+          pagination.classList.toggle('d-none', availableItems.length <= pageSize);
+        }
+        if (prevPageButton) {
+          prevPageButton.disabled = currentPage <= 1 || availableItems.length === 0;
+        }
+        if (nextPageButton) {
+          const totalPages = Math.max(1, Math.ceil(availableItems.length / pageSize));
+          nextPageButton.disabled = currentPage >= totalPages || availableItems.length === 0;
         }
       };
 
-      questionSelect.addEventListener('change', updateDetailLink);
-      questionSelect.addEventListener('dblclick', () => {
-        if (!detailLink.classList.contains('disabled') && detailLink.href) {
-          window.open(detailLink.href, '_blank', 'noopener=yes');
+      const showPage = (page) => {
+        const totalPages = Math.max(1, Math.ceil(availableItems.length / pageSize));
+        currentPage = Math.min(Math.max(page, 1), totalPages);
+        availableItems.forEach((item, index) => {
+          if (availableItems.length > pageSize) {
+            const itemPage = Math.floor(index / pageSize) + 1;
+            item.classList.toggle('d-none', itemPage !== currentPage);
+          } else {
+            item.classList.remove('d-none');
+          }
+        });
+        applyPaginationVisibility();
+        updatePaginationStatus();
+      };
+
+      if (prevPageButton) {
+        prevPageButton.addEventListener('click', () => {
+          if (currentPage > 1) {
+            showPage(currentPage - 1);
+          }
+        });
+      }
+
+      if (nextPageButton) {
+        nextPageButton.addEventListener('click', () => {
+          const totalPages = Math.max(1, Math.ceil(availableItems.length / pageSize));
+          if (currentPage < totalPages) {
+            showPage(currentPage + 1);
+          }
+        });
+      }
+
+      if (selectedPrevButton) {
+        selectedPrevButton.addEventListener('click', () => {
+          if (selectedCurrentPage > 1) {
+            showSelectedPage(selectedCurrentPage - 1);
+          }
+        });
+      }
+
+      if (selectedNextButton) {
+        selectedNextButton.addEventListener('click', () => {
+          const items = getSelectedItems();
+          const total = items.length;
+          if (total === 0) {
+            return;
+          }
+          const totalPages = Math.ceil(total / selectedPageSize);
+          if (selectedCurrentPage < totalPages) {
+            showSelectedPage(selectedCurrentPage + 1);
+          }
+        });
+      }
+
+      const updateState = () => {
+        const items = getSelectedItems();
+        const ids = items.map((item) => item.dataset.questionId).filter(Boolean);
+        selectedInput.value = ids.join(',');
+        if (emptyState) {
+          if (ids.length > 0) {
+            emptyState.classList.add('d-none');
+          } else {
+            emptyState.classList.remove('d-none');
+          }
+        }
+        availableList.querySelectorAll('[data-question-id]').forEach((item) => {
+          const id = item.dataset.questionId;
+          const isSelected = ids.includes(id);
+          const addButton = item.querySelector('button[data-action="add"]');
+          const removeButton = item.querySelector('button[data-action="remove"]');
+          if (addButton) {
+            addButton.disabled = isSelected;
+          }
+          if (removeButton) {
+            removeButton.disabled = !isSelected;
+          }
+        });
+
+        showSelectedPage(selectedCurrentPage);
+      };
+
+      const createSelectedItem = (id, summary, detailUrl) => {
+        const item = document.createElement('div');
+        item.className = 'list-group-item d-flex align-items-start justify-content-between gap-3';
+        item.dataset.questionId = id;
+        item.dataset.selectedItem = 'true';
+
+        const info = document.createElement('div');
+        info.className = 'me-auto';
+
+        const summaryEl = document.createElement('div');
+        summaryEl.className = 'small';
+        summaryEl.textContent = summary;
+        info.appendChild(summaryEl);
+
+        if (detailUrl) {
+          const link = document.createElement('a');
+          link.className = 'small';
+          link.href = detailUrl;
+          link.target = '_blank';
+          link.rel = 'noopener';
+          link.textContent = viewLabel;
+          info.appendChild(link);
+        }
+
+        const removeButton = document.createElement('button');
+        removeButton.type = 'button';
+        removeButton.className = 'btn btn-outline-danger btn-sm';
+        removeButton.dataset.action = 'remove';
+        removeButton.setAttribute('aria-label', removeLabel);
+        removeButton.textContent = '−';
+
+        item.appendChild(info);
+        item.appendChild(removeButton);
+
+        return item;
+      };
+
+      const addQuestion = (questionItem) => {
+        const id = questionItem.dataset.questionId;
+        if (!id) {
+          return;
+        }
+        const alreadySelected = selectedList.querySelector(
+          `[data-selected-item="true"][data-question-id="${id}"]`,
+        );
+        if (alreadySelected) {
+          return;
+        }
+        const summary = questionItem.dataset.questionSummary || questionItem.textContent.trim();
+        const detailUrl = questionItem.dataset.detailUrl || '';
+        const selectedItem = createSelectedItem(id, summary, detailUrl);
+        selectedList.appendChild(selectedItem);
+        const newTotal = getSelectedItems().length;
+        selectedCurrentPage = Math.max(1, Math.ceil(newTotal / selectedPageSize));
+        updateState();
+      };
+
+      const removeQuestion = (id) => {
+        const selectedItem = selectedList.querySelector(
+          `[data-selected-item="true"][data-question-id="${id}"]`,
+        );
+        if (!selectedItem) {
+          return;
+        }
+        selectedItem.remove();
+        updateState();
+      };
+
+      availableList.addEventListener('click', (event) => {
+        const button = event.target.closest('button[data-action]');
+        if (!button) {
+          return;
+        }
+        const item = button.closest('[data-question-id]');
+        if (!item) {
+          return;
+        }
+        if (button.dataset.action === 'add') {
+          addQuestion(item);
+        } else if (button.dataset.action === 'remove') {
+          removeQuestion(item.dataset.questionId);
         }
       });
-      updateDetailLink();
+
+      selectedList.addEventListener('click', (event) => {
+        const button = event.target.closest('button[data-action="remove"]');
+        if (!button) {
+          return;
+        }
+        const item = button.closest('[data-selected-item="true"][data-question-id]');
+        if (!item) {
+          return;
+        }
+        item.remove();
+        updateState();
+      });
+
+      showPage(1);
+      updateState();
     }
   })();
 </script>
