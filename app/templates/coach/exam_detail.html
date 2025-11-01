@@ -1,0 +1,57 @@
+{% extends 'base.html' %}
+{% block title %}{{ _('Exam details') }} - {{ paper.title }}{% endblock %}
+{% block content %}
+<div class="container py-4">
+  <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-4 gap-3">
+    <div>
+      <h1 class="h3 mb-2">{{ paper.title }}</h1>
+      <div class="text-muted">
+        {{ _('State') }}: {{ paper.state }}
+        <span class="mx-2">&middot;</span>
+        {{ _('Time limit (min)') }}: {{ paper.time_limit_minutes }}
+        <span class="mx-2">&middot;</span>
+        {{ _('Questions') }}: {{ paper_questions|length }}
+      </div>
+    </div>
+    <a class="btn btn-outline-secondary" href="{{ url_for('coach.exams') }}" target="_self">{{ _('Return to exam list') }}</a>
+  </div>
+  <div class="card shadow-sm">
+    <div class="card-header bg-white">
+      <h2 class="h5 mb-0">{{ _('Paper questions') }}</h2>
+    </div>
+    <div class="card-body">
+      {% if paper_questions %}
+      <div class="list-group list-group-flush">
+        {% for item in paper_questions %}
+        {% set question = item.question %}
+        <div class="list-group-item">
+          <div class="d-flex justify-content-between align-items-start mb-2 flex-wrap gap-2">
+            <div class="fw-semibold">{{ _('Question') }} {{ loop.index }}</div>
+            <div class="text-muted small">
+              {{ _('Topic') }}: {{ question.topic or _('Not specified') }}
+              <span class="mx-2">&middot;</span>
+              {{ _('Language') }}: {{ question.language or _('Unknown') }}
+            </div>
+          </div>
+          <p class="mb-3">{{ question.prompt | replace('\n', '<br>') | safe }}</p>
+          <ul class="list-unstyled small mb-3">
+            <li><strong>A.</strong> {{ question.option_a }}</li>
+            <li><strong>B.</strong> {{ question.option_b }}</li>
+            <li><strong>C.</strong> {{ question.option_c }}</li>
+            <li><strong>D.</strong> {{ question.option_d }}</li>
+          </ul>
+          <div class="small mb-2 text-success">{{ _('Correct answer: {option}').format(option=question.correct_option) }}</div>
+          {% if question.explanation %}
+          <div class="small text-muted">{{ _('Explanation') }}</div>
+          <p class="small mb-0">{{ question.explanation | replace('\n', '<br>') | safe }}</p>
+          {% endif %}
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <p class="text-muted mb-0">{{ _('No questions found for this paper.') }}</p>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}
