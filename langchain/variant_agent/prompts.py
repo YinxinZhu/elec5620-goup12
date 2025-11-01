@@ -53,7 +53,9 @@ VARIANT_GENERATION_PROMPT = ChatPromptTemplate.from_messages(
                 "The question must stay in the same language as the original question. "
                 "Return strict JSON with keys: `prompt`, `option_a`, `option_b`, `option_c`, "
                 "`option_d`, `correct_option`, and `explanation`. "
-                "Exactly four options labelled A-D must be produced. "
+                "Each option value must be a string. "
+                "`correct_option` must be exactly one uppercase letter from \"A\", \"B\", \"C\", or \"D\" with no other characters or words. "
+                "Provide exactly four options labelled A-D. "
                 "Ensure the explanation succinctly justifies the correct option."
             ),
         ),

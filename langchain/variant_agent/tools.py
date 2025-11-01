@@ -4,9 +4,9 @@ import json
 import re
 from typing import Any, Dict, List
 
-from langchain_core.pydantic_v1 import BaseModel, Field, conint
 from langchain_core.tools import StructuredTool
 from langchain_openai import ChatOpenAI
+from pydantic import BaseModel, Field, conint
 
 from .prompts import (
     KNOWLEDGE_POINT_PROMPT,
@@ -48,13 +48,14 @@ class ValidateVariantInput(BaseModel):
     explanation: str
 
 
+# Create LangChain tools used by the variant generation agent.
 def build_tools(
     tool_llm: ChatOpenAI,
     usage_tracker: UsageTracker,
     log_intermediate: bool = False,
 ) -> List[StructuredTool]:
-    """Create LangChain tools used by the variant generation agent."""
-
+    
+    # Capture the shared analyser behaviour for identifying the knowledge point.
     def analyze_topic(original_question: str) -> Dict[str, Any]:
         response = _invoke(tool_llm, KNOWLEDGE_POINT_PROMPT, usage_tracker, original_question=original_question)
         payload = _extract_json(response, default={})
@@ -62,6 +63,7 @@ def build_tools(
             print("[tool] analyze_topic ->", json.dumps(payload, ensure_ascii=False))
         return payload
 
+    # Plan how each variant should differ before generating questions.
     def plan_variations(
         knowledge_point_name: str,
         knowledge_point_summary: str,
@@ -84,6 +86,7 @@ def build_tools(
             print("[tool] plan_variations ->", json.dumps(payload, ensure_ascii=False))
         return payload
 
+    # Generate a single question variant based on the plan.
     def generate_question(
         knowledge_point_name: str,
         knowledge_point_summary: str,
@@ -106,6 +109,7 @@ def build_tools(
             print("[tool] generate_question ->", json.dumps(payload, ensure_ascii=False))
         return payload
 
+    # Validate that a generated question still meets the rules.
     def validate_question(
         prompt: str,
         option_a: str,
@@ -160,13 +164,14 @@ def build_tools(
     ]
 
 
+# Invoke the LLM with a prepared prompt and capture usage metadata.
 def _invoke(
     llm: ChatOpenAI,
-    prompt: Any,
+    prompt_template: Any,
     usage_tracker: UsageTracker,
     **kwargs: Any,
 ):
-    messages = prompt.format_messages(**kwargs)
+    messages = prompt_template.format_messages(**kwargs)
     response = llm.invoke(messages)
     metadata = getattr(response, "response_metadata", {}) or {}
     if isinstance(metadata, dict):
@@ -174,11 +179,25 @@ def _invoke(
     return response
 
 
+# Extract JSON payloads from OpenAI responses, handling Responses API formats.
 def _extract_json(response: Any, default: Any) -> Any:
     raw_content = getattr(response, "content", "") or ""
 
     if isinstance(raw_content, list):
-        raw_content = "".join(str(part) for part in raw_content)
+        text_segments: List[str] = []
+        for part in raw_content:
+            if isinstance(part, dict):
+                # Newer Responses API returns dicts shaped like {"type": "text", "text": "..."}.
+                text_value = part.get("text") if isinstance(part.get("text"), str) else None
+                if text_value:
+                    text_segments.append(text_value)
+            elif isinstance(part, str):
+                text_segments.append(part)
+            else:
+                text_value = getattr(part, "text", None)
+                if isinstance(text_value, str):
+                    text_segments.append(text_value)
+        raw_content = "".join(text_segments) if text_segments else ""
 
     if isinstance(raw_content, str):
         raw_content = raw_content.strip()
@@ -197,8 +216,8 @@ def _extract_json(response: Any, default: Any) -> Any:
     return default
 
 
+# Extract the first likely JSON object from free-form text.
 def _find_json_block(text: str) -> str | None:
-    """Extract the first likely JSON object from free-form text."""
     stack = []
     start = None
     for idx, char in enumerate(text):
@@ -211,5 +230,6 @@ def _find_json_block(text: str) -> str | None:
                 stack.pop()
                 if not stack and start is not None:
                     return text[start : idx + 1]
+    # Fall back to a broad regex search when bracket tracking fails.
     match = re.search(r"\{.*\}", text, re.DOTALL)
     return match.group(0) if match else None

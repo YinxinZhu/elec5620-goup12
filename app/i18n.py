@@ -297,6 +297,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "Variants to generate": "生成题目数量",
         "Allowed range": "允许范围",
         "Generate variants": "生成变式题",
+        "AI-Agent is generating variant questions for you. This may take around 10 seconds...": "AI-Agent 正在为你生成变式题，大约需要10秒钟...",
         "Variant question": "变式题",
         "This variant set has no questions yet.": "该题组尚未包含任何变式题。",
         "Select a question to generate variants.": "请选择一个题目来生成变式题。",
