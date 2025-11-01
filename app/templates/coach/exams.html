@@ -142,6 +142,18 @@
                 <div class="list-group min-vh-25" id="selected-questions" data-role="selected-questions" data-remove-label="{{ _('Remove question') }}" data-view-label="{{ _('View details') }}">
                   <div class="list-group-item text-muted small" data-role="empty-state">{{ _('No questions selected yet.') }}</div>
                 </div>
+                <div
+                  class="d-flex flex-column flex-md-row justify-content-md-between align-items-md-center gap-2 mt-3"
+                  data-role="selected-pagination"
+                  data-status-template="{{ _('Showing {start}-{end} of {total} questions') }}"
+                  data-empty-text="{{ _('No questions selected') }}"
+                >
+                  <div class="small text-muted" data-role="pagination-status"></div>
+                  <div class="btn-group btn-group-sm" role="group">
+                    <button type="button" class="btn btn-outline-secondary" data-action="prev-page">{{ _('Previous') }}</button>
+                    <button type="button" class="btn btn-outline-secondary" data-action="next-page">{{ _('Next') }}</button>
+                  </div>
+                </div>
               </div>
             </div>
             <input type="hidden" id="selected_question_ids" name="selected_question_ids">
@@ -240,6 +252,80 @@
       const getSelectedItems = () =>
         Array.from(selectedList.querySelectorAll('[data-selected-item="true"]'));
 
+      const selectedPagination = document.querySelector('[data-role="selected-pagination"]');
+      const selectedPaginationStatus = selectedPagination
+        ? selectedPagination.querySelector('[data-role="pagination-status"]')
+        : null;
+      const selectedPrevButton = selectedPagination
+        ? selectedPagination.querySelector('button[data-action="prev-page"]')
+        : null;
+      const selectedNextButton = selectedPagination
+        ? selectedPagination.querySelector('button[data-action="next-page"]')
+        : null;
+      const selectedPageSize = 10;
+      let selectedCurrentPage = 1;
+
+      const updateSelectedPaginationStatus = (total) => {
+        if (!selectedPaginationStatus || !selectedPagination) {
+          return;
+        }
+        const template = selectedPagination.dataset.statusTemplate || 'Showing {start}-{end} of {total} questions';
+        const emptyText = selectedPagination.dataset.emptyText || 'No questions selected';
+        if (total === 0) {
+          selectedPaginationStatus.textContent = emptyText;
+          return;
+        }
+        const start = (selectedCurrentPage - 1) * selectedPageSize + 1;
+        const end = Math.min(selectedCurrentPage * selectedPageSize, total);
+        selectedPaginationStatus.textContent = template
+          .replace('{start}', start)
+          .replace('{end}', end)
+          .replace('{total}', total);
+      };
+
+      const showSelectedPage = (page) => {
+        const items = getSelectedItems();
+        const total = items.length;
+
+        if (!selectedPagination) {
+          items.forEach((item) => item.classList.remove('d-none'));
+          return;
+        }
+
+        if (total === 0) {
+          selectedCurrentPage = 1;
+        } else {
+          const totalPages = Math.ceil(total / selectedPageSize);
+          selectedCurrentPage = Math.min(Math.max(page, 1), totalPages);
+        }
+
+        items.forEach((item, index) => {
+          if (total > selectedPageSize) {
+            const itemPage = Math.floor(index / selectedPageSize) + 1;
+            item.classList.toggle('d-none', itemPage !== selectedCurrentPage);
+          } else {
+            item.classList.remove('d-none');
+          }
+        });
+
+        if (total === 0) {
+          selectedPagination.classList.remove('d-none');
+        } else {
+          selectedPagination.classList.toggle('d-none', total <= selectedPageSize);
+        }
+
+        if (selectedPrevButton) {
+          selectedPrevButton.disabled = selectedCurrentPage <= 1 || total === 0;
+        }
+
+        if (selectedNextButton) {
+          const totalPages = total === 0 ? 1 : Math.ceil(total / selectedPageSize);
+          selectedNextButton.disabled = selectedCurrentPage >= totalPages || total === 0;
+        }
+
+        updateSelectedPaginationStatus(total);
+      };
+
       const updatePaginationStatus = () => {
         if (!paginationStatus || !pagination) {
           return;
@@ -275,8 +361,6 @@
           const totalPages = Math.max(1, Math.ceil(availableItems.length / pageSize));
           nextPageButton.disabled = currentPage >= totalPages || availableItems.length === 0;
         }
-        selectedItem.remove();
-        updateState();
       };
 
       const showPage = (page) => {
@@ -311,6 +395,28 @@
         });
       }
 
+      if (selectedPrevButton) {
+        selectedPrevButton.addEventListener('click', () => {
+          if (selectedCurrentPage > 1) {
+            showSelectedPage(selectedCurrentPage - 1);
+          }
+        });
+      }
+
+      if (selectedNextButton) {
+        selectedNextButton.addEventListener('click', () => {
+          const items = getSelectedItems();
+          const total = items.length;
+          if (total === 0) {
+            return;
+          }
+          const totalPages = Math.ceil(total / selectedPageSize);
+          if (selectedCurrentPage < totalPages) {
+            showSelectedPage(selectedCurrentPage + 1);
+          }
+        });
+      }
+
       const updateState = () => {
         const items = getSelectedItems();
         const ids = items.map((item) => item.dataset.questionId).filter(Boolean);
@@ -334,6 +440,8 @@
             removeButton.disabled = !isSelected;
           }
         });
+
+        showSelectedPage(selectedCurrentPage);
       };
 
       const createSelectedItem = (id, summary, detailUrl) => {
@@ -388,6 +496,8 @@
         const detailUrl = questionItem.dataset.detailUrl || '';
         const selectedItem = createSelectedItem(id, summary, detailUrl);
         selectedList.appendChild(selectedItem);
+        const newTotal = getSelectedItems().length;
+        selectedCurrentPage = Math.max(1, Math.ceil(newTotal / selectedPageSize));
         updateState();
       };
 
