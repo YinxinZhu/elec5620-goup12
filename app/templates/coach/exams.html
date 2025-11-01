@@ -99,24 +99,40 @@
             </div>
           </div>
           <div class="selection-manual">
-            <label class="form-label" for="question_ids">{{ _('Choose questions (hold Ctrl/⌘ to multi-select)') }}</label>
-            <select class="form-select" id="question_ids" name="question_ids" multiple size="8">
-              {% for question in available_questions %}
-              <option value="{{ question.id }}">[{{ question.topic }}] {{ question.prompt[:80] }}{% if question.prompt|length > 80 %}…{% endif %}</option>
-              {% endfor %}
-            </select>
-            <div class="d-flex align-items-center gap-2 mt-2">
-              <a
-                class="btn btn-outline-secondary btn-sm disabled"
-                data-role="question-detail-link"
-                data-detail-url-base="{{ url_for('coach.question_detail', question_id=0).rsplit('/', 1)[0] }}"
-                target="_blank"
-                rel="noopener"
-                aria-disabled="true"
-              >{{ _('View selected question') }}</a>
-              <small class="text-muted">{{ _('Double-click a question to open details.') }}</small>
+            <div class="row g-3">
+              <div class="col-lg-7">
+                <label class="form-label" for="available-questions">{{ _('Available questions') }}</label>
+                <div class="list-group" id="available-questions" data-role="available-questions">
+                  {% for question in available_questions %}
+                  {% set summary = '[' ~ question.topic ~ '] ' ~ question.prompt[:80] ~ ('…' if question.prompt|length > 80 else '') %}
+                  <div
+                    class="list-group-item d-flex align-items-start justify-content-between gap-3"
+                    data-question-id="{{ question.id }}"
+                    data-question-summary="{{ summary|e }}"
+                    data-detail-url="{{ url_for('coach.question_detail', question_id=question.id) }}"
+                  >
+                    <div class="me-auto">
+                      <div class="small">{{ summary }}</div>
+                      <a class="small" href="{{ url_for('coach.question_detail', question_id=question.id) }}" target="_blank" rel="noopener">{{ _('View details') }}</a>
+                    </div>
+                    <div class="btn-group btn-group-sm flex-shrink-0" role="group" aria-label="{{ _('Add or remove question') }}">
+                      <button type="button" class="btn btn-outline-success" data-action="add" aria-label="{{ _('Add question') }}">&plus;</button>
+                      <button type="button" class="btn btn-outline-danger" data-action="remove" aria-label="{{ _('Remove question') }}">&minus;</button>
+                    </div>
+                  </div>
+                  {% endfor %}
+                </div>
+                <div class="form-text mt-2">{{ _('Use the plus button to add questions to the paper. Use the minus button to remove them.') }}</div>
+                <div class="form-text">{{ _('Questions outside the selected state are ignored automatically.') }}</div>
+              </div>
+              <div class="col-lg-5">
+                <label class="form-label" for="selected-questions">{{ _('Selected questions') }}</label>
+                <div class="list-group min-vh-25" id="selected-questions" data-role="selected-questions" data-remove-label="{{ _('Remove question') }}" data-view-label="{{ _('View details') }}">
+                  <div class="list-group-item text-muted small" data-role="empty-state">{{ _('No questions selected yet.') }}</div>
+                </div>
+              </div>
             </div>
-            <div class="form-text">{{ _('Questions outside the selected state are ignored automatically.') }}</div>
+            <input type="hidden" id="selected_question_ids" name="selected_question_ids">
           </div>
           <div class="selection-auto d-none">
             <div class="row g-3">
@@ -193,31 +209,138 @@
       });
     });
 
-    const questionSelect = document.getElementById('question_ids');
-    const detailLink = document.querySelector('[data-role="question-detail-link"]');
-    if (questionSelect && detailLink) {
-      const base = detailLink.dataset.detailUrlBase || '';
-      const prefix = base.endsWith('/') ? base : `${base}/`;
-      const updateDetailLink = () => {
-        const selected = questionSelect.value;
-        if (selected) {
-          detailLink.classList.remove('disabled');
-          detailLink.setAttribute('aria-disabled', 'false');
-          detailLink.href = `${prefix}${selected}`;
-        } else {
-          detailLink.classList.add('disabled');
-          detailLink.setAttribute('aria-disabled', 'true');
-          detailLink.href = '#';
+    const availableList = document.querySelector('[data-role="available-questions"]');
+    const selectedList = document.querySelector('[data-role="selected-questions"]');
+    const selectedInput = document.getElementById('selected_question_ids');
+    if (availableList && selectedList && selectedInput) {
+      const emptyState = selectedList.querySelector('[data-role="empty-state"]');
+      const removeLabel = selectedList.dataset.removeLabel || 'Remove question';
+      const viewLabel = selectedList.dataset.viewLabel || 'View details';
+
+      const getSelectedItems = () =>
+        Array.from(selectedList.querySelectorAll('[data-selected-item="true"]'));
+
+      const updateState = () => {
+        const items = getSelectedItems();
+        const ids = items.map((item) => item.dataset.questionId).filter(Boolean);
+        selectedInput.value = ids.join(',');
+        if (emptyState) {
+          if (ids.length > 0) {
+            emptyState.classList.add('d-none');
+          } else {
+            emptyState.classList.remove('d-none');
+          }
         }
+        availableList.querySelectorAll('[data-question-id]').forEach((item) => {
+          const id = item.dataset.questionId;
+          const isSelected = ids.includes(id);
+          const addButton = item.querySelector('button[data-action="add"]');
+          const removeButton = item.querySelector('button[data-action="remove"]');
+          if (addButton) {
+            addButton.disabled = isSelected;
+          }
+          if (removeButton) {
+            removeButton.disabled = !isSelected;
+          }
+        });
       };
 
-      questionSelect.addEventListener('change', updateDetailLink);
-      questionSelect.addEventListener('dblclick', () => {
-        if (!detailLink.classList.contains('disabled') && detailLink.href) {
-          window.open(detailLink.href, '_blank', 'noopener=yes');
+      const createSelectedItem = (id, summary, detailUrl) => {
+        const item = document.createElement('div');
+        item.className = 'list-group-item d-flex align-items-start justify-content-between gap-3';
+        item.dataset.questionId = id;
+        item.dataset.selectedItem = 'true';
+
+        const info = document.createElement('div');
+        info.className = 'me-auto';
+
+        const summaryEl = document.createElement('div');
+        summaryEl.className = 'small';
+        summaryEl.textContent = summary;
+        info.appendChild(summaryEl);
+
+        if (detailUrl) {
+          const link = document.createElement('a');
+          link.className = 'small';
+          link.href = detailUrl;
+          link.target = '_blank';
+          link.rel = 'noopener';
+          link.textContent = viewLabel;
+          info.appendChild(link);
+        }
+
+        const removeButton = document.createElement('button');
+        removeButton.type = 'button';
+        removeButton.className = 'btn btn-outline-danger btn-sm';
+        removeButton.dataset.action = 'remove';
+        removeButton.setAttribute('aria-label', removeLabel);
+        removeButton.textContent = '−';
+
+        item.appendChild(info);
+        item.appendChild(removeButton);
+
+        return item;
+      };
+
+      const addQuestion = (questionItem) => {
+        const id = questionItem.dataset.questionId;
+        if (!id) {
+          return;
+        }
+        const alreadySelected = selectedList.querySelector(
+          `[data-selected-item="true"][data-question-id="${id}"]`,
+        );
+        if (alreadySelected) {
+          return;
+        }
+        const summary = questionItem.dataset.questionSummary || questionItem.textContent.trim();
+        const detailUrl = questionItem.dataset.detailUrl || '';
+        const selectedItem = createSelectedItem(id, summary, detailUrl);
+        selectedList.appendChild(selectedItem);
+        updateState();
+      };
+
+      const removeQuestion = (id) => {
+        const selectedItem = selectedList.querySelector(
+          `[data-selected-item="true"][data-question-id="${id}"]`,
+        );
+        if (!selectedItem) {
+          return;
+        }
+        selectedItem.remove();
+        updateState();
+      };
+
+      availableList.addEventListener('click', (event) => {
+        const button = event.target.closest('button[data-action]');
+        if (!button) {
+          return;
+        }
+        const item = button.closest('[data-question-id]');
+        if (!item) {
+          return;
+        }
+        if (button.dataset.action === 'add') {
+          addQuestion(item);
+        } else if (button.dataset.action === 'remove') {
+          removeQuestion(item.dataset.questionId);
         }
       });
-      updateDetailLink();
+
+      selectedList.addEventListener('click', (event) => {
+        const button = event.target.closest('button[data-action="remove"]');
+        if (!button) {
+          return;
+        }
+        const item = button.closest('[data-selected-item="true"][data-question-id]');
+        if (!item) {
+          return;
+        }
+        item.remove();
+        updateState();
+      });
+
+      updateState();
     }
   })();
 </script>

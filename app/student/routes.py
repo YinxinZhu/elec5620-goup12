@@ -1151,6 +1151,7 @@ def exams():
     topic_rows = (
         Question.query.with_entities(Question.topic)
         .filter((Question.state_scope == "ALL") | (Question.state_scope == student.state))
+        .filter(Question.language == student.preferred_language)
         .distinct()
         .order_by(Question.topic.asc())
         .all()
@@ -1345,7 +1346,7 @@ def practice():
 
         query = Question.query.filter(
             (Question.state_scope == "ALL") | (Question.state_scope == student.state)
-        )
+        ).filter(Question.language == student.preferred_language)
         if topic:
             query = query.filter(Question.topic.ilike(f"%{topic}%"))
 
@@ -1365,7 +1366,11 @@ def practice():
         flash(_t("Start a practice session from the exam hub."), "info")
         return redirect(url_for("student.exams"))
 
-    questions = Question.query.filter(Question.id.in_(question_ids)).all()
+    questions = (
+        Question.query.filter(Question.id.in_(question_ids))
+        .filter(Question.language == student.preferred_language)
+        .all()
+    )
     lookup = {question.id: question for question in questions}
     ordered_questions = [lookup[qid] for qid in question_ids if qid in lookup]
     starred_ids = _starred_question_ids(student, set(lookup.keys()))
