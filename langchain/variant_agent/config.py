@@ -5,9 +5,8 @@ from pydantic import Field
 from pydantic_settings import BaseSettings
 
 
+# Application configuration sourced from environment variables.
 class Settings(BaseSettings):
-    """Application configuration sourced from environment variables."""
-
     openai_api_key: str = Field(..., alias="OPENAI_API_KEY")
     openai_base_url: Optional[str] = Field(
         default=None, alias="OPENAI_BASE_URL", description="Override the OpenAI base URL."
@@ -33,7 +32,7 @@ class Settings(BaseSettings):
         case_sensitive = False
 
 
+# Return cached application settings.
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
-    """Return cached application settings."""
     return Settings()  # type: ignore[arg-type]

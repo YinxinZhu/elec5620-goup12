@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field, model_validator
 
 
 class VariantRequest(BaseModel):
-    """Input payload accepted by /api/generateVariant."""
+    # Input payload accepted by /api/generateVariant.
 
     question: str = Field(..., description="Original exam question in any language.")
     num: Optional[int] = Field(
@@ -16,6 +16,7 @@ class VariantRequest(BaseModel):
         description="Number of variants requested (1-5, defaults to 3).",
     )
 
+    # Ensure the learner question is not empty or whitespace.
     @model_validator(mode="after")
     def ensure_non_empty_question(self) -> "VariantRequest":
         if not self.question or not self.question.strip():
