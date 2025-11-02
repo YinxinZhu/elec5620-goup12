@@ -55,7 +55,7 @@ learner self-registration form directly beneath the login action.
 #### One-command bootstrap (recommended for local demos)
 
 ```bash
-scripts/bootstrap.sh
+scripts/bootstrap.bat
 ```
 
 The helper script creates a `.venv` virtual environment, installs the
