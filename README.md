@@ -33,7 +33,7 @@ learner self-registration form directly beneath the login action.
 - Optional but recommended: `venv` or `pyenv` for virtual environment
   management
 
-## Getting started
+ Getting started
 
 
 1. **Install dependencies**
@@ -210,3 +210,34 @@ tests/              # pytest regression suite
 
 With these steps the learner practice portal is ready for local development or
 integration into a broader deployment.
+
+## AI Statement
+
+Generative AI tools were used sparingly to assist with requirement triage, copy
+editing, and light code review. All critical architecture decisions, core
+business logic, and the final published code were designed, implemented, and
+verified by the project team, who retain full responsibility for the output. AI
+acts solely as an efficiency aid and does not replace human judgement.
+
+## Incorporated Advanced Technologies
+
+Modular Flask Full-stack Framework: The backend is centered on Flask, 
+combined with SQLAlchemy ORM, Flask-Migrate data migration framework, 
+and Flask-Login authentication, forming an extensible multi-blueprint Web application skeleton, 
+and realizing dynamic language switching and template context injection in request hooks.
+
+AI-driven Question Variant Generation System: The core business sends questions to an external 
+proxy service through app/services/variant_generation.py to generate multi-language question variants. 
+If the external proxy is unavailable, it falls back to a deterministic local algorithm to ensure robust functionality.
+
+LangChain + FastAPI Agent Service: langchain/server.py exposes FastAPI interfaces, 
+and internally reuses LangChain's tool calling agent, ChatOpenAI model, 
+and custom Agent tracer to produce structured JSON question variant results according to a strict workflow.
+
+Node.js OpenAI Proxy Gateway: ai-usage/server.js builds a lightweight service based on Express, 
+responsible for validating requests, calling the OpenAI Responses API, organizing usage statistics, 
+and returning question variant data in a unified format, realizing reliable connection with external LLMs.
+
+Built-in Multilingual Support and Localization Resources: app/i18n.py provides cacheable language mappings, 
+translation dictionaries, and speech metadata, enabling the entire portal interface to support Chinese-English bilingual switching 
+and seamlessly integrate with identity management logic.
