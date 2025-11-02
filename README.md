@@ -9,7 +9,7 @@
 - [AI Agent](#ai-agent)
 - [Feature Details](#feature-details)
 - [Development Guide](#development-guide)
-
+- [Use of AI Statement](#use-of-ai-statement)
 
 
 ## Project overview
@@ -52,6 +52,17 @@ learner self-registration form directly beneath the login action.
 
 ### Installation guide
 
+#### One-command bootstrap (recommended for local demos)
+
+```bash
+scripts/bootstrap.sh
+```
+
+The helper script creates a `.venv` virtual environment, installs the
+dependencies, initialises the SQLite database, seeds demo data, and launches the
+development server. Pass `--no-seed` to skip demo fixtures or `--skip-run` to
+only prepare the environment.
+
 1. **Install dependencies**
    ```bash
    pip install --upgrade pip
@@ -85,7 +96,7 @@ learner self-registration form directly beneath the login action.
    The unified web portal is available at http://127.0.0.1:5000/coach/login and
    serves administrators, coaches, and students from the same entry point.
 
-## Demo credentials
+## Demo Accounts
 
 `seed-demo` provisions the following accounts for quick manual testing (all
 roles authenticate with their mobile number):
@@ -109,11 +120,29 @@ learner dashboard after signing in or registering.
 ### Flask
 Flask is a lightweight Python web framework that powers the application's request routing, templating, and middleware stack, giving us the flexibility to compose blueprints for coaches, administrators, and learners within a unified portal. Its modular extension ecosystem lets us layer in authentication, caching, and background workers incrementally so the platform scales without sacrificing clarity in the core server code.
 
+### Modular Flask Full-stack Framework: 
+The backend is centered on Flask, 
+combined with SQLAlchemy ORM, Flask-Migrate data migration framework, 
+and Flask-Login authentication, forming an extensible multi-blueprint Web application skeleton, 
+and realizing dynamic language switching and template context injection in request hooks.
+
 ### SQLAlchemy
 SQLAlchemy provides the ORM and SQL toolkit used to model the training data, generate migrations, and interact with the underlying database through expressive Python abstractions rather than raw SQL.
 
+### LangChain + FastAPI Agent Service: 
+`langchain/server.py` exposes FastAPI interfaces, 
+and internally reuses LangChain's tool calling agent, ChatOpenAI model, 
+and custom Agent tracer to produce structured JSON question variant results according to a strict workflow.
+
+
 ### LangChain
 LangChain orchestrates large language model workflows in the project, enabling the variant generation services and AI agent to chain prompts, tools, and memory for context-aware reasoning.
+
+### Built-in Multilingual Support and Localization Resources: 
+`app/i18n.py` provides cacheable language mappings, 
+translation dictionaries, and speech metadata, enabling the entire portal interface to support Chinese-English bilingual switching 
+and seamlessly integrate with identity management logic.
+
 
 ### OpenAI GPT-5
 GPT-5 is OpenAI's newest and most capable model launched in 2025. The model's expanded context window and fine-grained alignment controls keep outputs consistent with project guidelines. With GPT-5 as This breadth of capability underpins the AI agent flows in the platform, giving them a dependable foundation for sophisticated tooling decisions and high-quality assistance.
@@ -125,18 +154,18 @@ Codex is a powerful AI coding tool developed by OpenAI. Its core strength is the
 
 ## AI Agent
 
-### Architecture and work flows of Langchian AI Agent
+### Architecture and work flows of LangChain AI Agent
 
-Step 1: analyze_topic
+#### Step 1: analyze_topic
 The planner first calls the analyze_topic tool to capture the knowledge point name and summary that will serve as shared context for every variant.
 
-Step 2: plan_variations
+#### Step 2: plan_variations
 With that context and the target quantity, the planner calls plan_variations to obtain a list of variation plans, each indicating the aspect to focus on (scenario, wording, numbers, etc.).
 
-Step 3: generate_question (loop)
+#### Step 3: generate_question (loop)
 For each plan item, the planner calls generate_question to create a full prompt, four answer choices, the correct option, and an explanation.
 
-Step 4: validate_question (loop, with backtracking when needed)
+#### Step 4: validate_question (loop, with backtracking when needed)
 Right after generation, the planner invokes validate_question to ensure compliance. If the check fails, the planner incorporates the feedback and repeats Step 3 until the question passes.
 
 Once every question clears validation, the planner outputs the final JSON result, and the agent parses and organizes everything in one shot. This is the internal tool-calling flow you need for the agent.
@@ -274,6 +303,8 @@ tests/              # pytest regression suite
 With these steps the learner practice portal is ready for local development or
 integration into a broader deployment.
 
+
+
 ## Use of AI Statement
 
 Generative AI tools were used sparingly to assist with requirement triage, copy
@@ -281,3 +312,5 @@ editing, and light code review. All critical architecture decisions, core
 business logic, and the final published code were designed, implemented, and
 verified by the project team, who retain full responsibility for the output. AI
 acts solely as an efficiency aid and does not replace human judgement.
+
+
