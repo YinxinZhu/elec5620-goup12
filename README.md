@@ -9,7 +9,7 @@
 - [AI Agent](#ai-agent)
 - [Feature Details](#feature-details)
 - [Development Guide](#development-guide)
-
+- [Use of AI Statement](#use-of-ai-statement)
 
 
 ## Project overview
@@ -85,7 +85,7 @@ learner self-registration form directly beneath the login action.
    The unified web portal is available at http://127.0.0.1:5000/coach/login and
    serves administrators, coaches, and students from the same entry point.
 
-## Demo credentials
+### Demo Accounts
 
 `seed-demo` provisions the following accounts for quick manual testing (all
 roles authenticate with their mobile number):
@@ -143,18 +143,18 @@ Codex is a powerful AI coding tool developed by OpenAI. Its core strength is the
 
 ## AI Agent
 
-### Architecture and work flows of Langchian AI Agent
+### Architecture and work flows of LangChain AI Agent
 
-Step 1: analyze_topic
+#### Step 1: analyze_topic
 The planner first calls the analyze_topic tool to capture the knowledge point name and summary that will serve as shared context for every variant.
 
-Step 2: plan_variations
+#### Step 2: plan_variations
 With that context and the target quantity, the planner calls plan_variations to obtain a list of variation plans, each indicating the aspect to focus on (scenario, wording, numbers, etc.).
 
-Step 3: generate_question (loop)
+#### Step 3: generate_question (loop)
 For each plan item, the planner calls generate_question to create a full prompt, four answer choices, the correct option, and an explanation.
 
-Step 4: validate_question (loop, with backtracking when needed)
+#### Step 4: validate_question (loop, with backtracking when needed)
 Right after generation, the planner invokes validate_question to ensure compliance. If the check fails, the planner incorporates the feedback and repeats Step 3 until the question passes.
 
 Once every question clears validation, the planner outputs the final JSON result, and the agent parses and organizes everything in one shot. This is the internal tool-calling flow you need for the agent.
