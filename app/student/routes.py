@@ -7,6 +7,8 @@ import random
 from flask import (
     Blueprint,
     Response,
+    abort,
+    current_app,
     flash,
     g,
     jsonify,
@@ -15,7 +17,6 @@ from flask import (
     request,
     session,
     url_for,
-    abort,
 )
 from flask_login import current_user, login_required
 from sqlalchemy import func
@@ -908,6 +909,11 @@ def variant():
             key=lambda item: item.created_at,
         )  # Ensure variants render chronologically and are scoped to the student
 
+    agent_options: dict[str, dict[str, str]] = current_app.config.get("VARIANT_PROXY_ENDPOINTS", {}) or {}
+    agent_default = (current_app.config.get("VARIANT_PROXY_DEFAULT_AGENT") or "fast").lower()
+    if agent_options and agent_default not in agent_options:
+        agent_default = next(iter(agent_options))
+
     return render_template(
         "student/variant.html",
         base_question=base_question,
@@ -917,6 +923,7 @@ def variant():
         variant_min_count=VARIANT_MIN_COUNT,
         variant_max_count=VARIANT_MAX_COUNT,
         variant_default_count=VARIANT_DEFAULT_COUNT,
+        variant_agent_default=agent_default,
     )
 
 
@@ -933,6 +940,7 @@ def variant_generate():
         payload = request.form.to_dict()
     raw_question_id = payload.get("questionId")
     raw_variant_count = payload.get("variantCount")
+    raw_agent_mode = payload.get("agentMode") or payload.get("agent")
 
     try:
         question_id = int(raw_question_id)
@@ -949,6 +957,19 @@ def variant_generate():
     if not _question_accessible(question, student):
         return jsonify({"ok": False, "error": _t("This question is not available for your state.")}), 403
 
+    agent_config: dict[str, dict[str, str]] = current_app.config.get("VARIANT_PROXY_ENDPOINTS", {}) or {}
+    default_agent = (current_app.config.get("VARIANT_PROXY_DEFAULT_AGENT") or "fast").lower()
+    agent_mode = (
+        str(raw_agent_mode).strip().lower()
+        if raw_agent_mode is not None
+        else default_agent
+    )
+    if agent_config:
+        if agent_mode not in agent_config:
+            agent_mode = default_agent if default_agent in agent_config else next(iter(agent_config))
+    else:
+        agent_mode = agent_mode or default_agent
+
     existing_group = _existing_variant_group(student.id, question.id)
     if existing_group:
         flash(_t("Showing your previously generated variants."), "info")
@@ -962,7 +983,9 @@ def variant_generate():
 
     try:
         knowledge_name, knowledge_summary, drafts = generate_variants_with_metadata(
-            question, count=requested_count
+            question,
+            count=requested_count,
+            agent=agent_mode,
         )
     except ValueError:
         return jsonify({"ok": False, "error": _t("Please choose a valid variant count.")}), 400
