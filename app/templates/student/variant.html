@@ -203,6 +203,8 @@
   aria-modal="true"
   aria-live="polite"
   data-start-text="{{ _('AI-Agent is generating variant questions for you. This may take around 10 seconds...') }}"
+  data-start-text-fast="{{ _('AI-Agent is generating variant questions for you. This may take around 10 seconds...') }}"
+  data-start-text-complex="{{ _('AI-Agent is generating variant questions for you. This may take around 90 seconds...') }}"
   data-success-text="{{ _('Variants ready! Loading results...') }}"
   data-error-text="{{ _('Generation failed. Please try again.') }}"
 >
@@ -239,7 +241,10 @@
     const submitButton = document.getElementById("variant-generate-submit");
 
     const labels = {
-      start: overlay.dataset.startText || "Generating variants...",
+      startDefault: overlay.dataset.startText || "Generating variants...",
+      startFast: overlay.dataset.startTextFast || overlay.dataset.startText || "Generating variants...",
+      startComplex:
+        overlay.dataset.startTextComplex || overlay.dataset.startText || "Generating variants...",
       success: overlay.dataset.successText || "Variants ready!",
       error: overlay.dataset.errorText || "Generation failed. Please try again.",
     };
@@ -254,38 +259,48 @@
     const createProgressController = () => {
       let progress = 0;
       let phase = "fast";
-      const startTime = Date.now();
+      let startTime = 0;
       let timerId = null;
       let slowStart = null;
+      let fastDuration = 8;
+      let slowDuration = 2;
+
+      const easeOutQuad = (t) => 1 - (1 - t) * (1 - t);
 
       const tick = () => {
         const now = Date.now();
         if (phase === "fast") {
-          const elapsed = (now - startTime) / 1000;
-          const target = Math.min(80, (elapsed / 10) * 80);
+          const elapsed = Math.max(0, (now - startTime) / 1000);
+          const ratio = fastDuration > 0 ? Math.min(1, elapsed / fastDuration) : 1;
+          const target = ratio * 80;
           if (target > progress) {
             progress = target;
             updateProgressBar(progress);
           }
-          if (progress >= 80 || elapsed >= 10) {
+          if (ratio >= 1) {
             phase = "slow";
             slowStart = now;
           }
         } else if (phase === "slow" && slowStart) {
-          const slowElapsed = (now - slowStart) / 1000;
-          const eased = 80 + 19 * (1 - Math.exp(-slowElapsed / 4));
+          const slowElapsed = Math.max(0, (now - slowStart) / 1000);
+          const ratio = slowDuration > 0 ? Math.min(1, slowElapsed / slowDuration) : 1;
+          const eased = 80 + 19 * easeOutQuad(ratio);
           progress = Math.min(99, eased);
           updateProgressBar(progress);
         }
       };
 
-      const start = () => {
+      const start = (expectedSeconds = 10, startMessage = labels.startDefault) => {
         overlay.classList.add("is-active");
         progress = 0;
         phase = "fast";
         slowStart = null;
+        startTime = Date.now();
+        const total = Math.max(1, expectedSeconds);
+        fastDuration = total * 0.8;
+        slowDuration = Math.max(0.5, total - fastDuration);
         updateProgressBar(0);
-        progressLabel.textContent = labels.start;
+        progressLabel.textContent = startMessage || labels.startDefault;
         timerId = window.setInterval(tick, 100);
       };
 
@@ -313,7 +328,7 @@
           window.setTimeout(() => {
             overlay.classList.remove("is-active");
             updateProgressBar(0);
-            progressLabel.textContent = labels.start;
+      progressLabel.textContent = labels.startDefault;
           }, delay);
         },
       };
@@ -338,7 +353,9 @@
       }
 
       submitButton.disabled = true;
-      progress.start();
+      const expectedSeconds = agentMode === "complex" ? 90 : 10;
+      const startMessage = agentMode === "complex" ? labels.startComplex : labels.startFast;
+      progress.start(expectedSeconds, startMessage);
 
       try {
         const response = await fetch(form.dataset.generateUrl, {
