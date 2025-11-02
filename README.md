@@ -12,7 +12,7 @@
 - [Use of AI Statement](#use-of-ai-statement)
 
 
-## Project overview
+## Project Overview
 
 This repository powers the unified administrator, coach, and learner web
 experience for a driver training platform. It is built with Flask, SQLAlchemy,
