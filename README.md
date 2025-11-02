@@ -273,3 +273,11 @@ tests/              # pytest regression suite
 
 With these steps the learner practice portal is ready for local development or
 integration into a broader deployment.
+
+## Use of AI Statement
+
+Generative AI tools were used sparingly to assist with requirement triage, copy
+editing, and light code review. All critical architecture decisions, core
+business logic, and the final published code were designed, implemented, and
+verified by the project team, who retain full responsibility for the output. AI
+acts solely as an efficiency aid and does not replace human judgement.
