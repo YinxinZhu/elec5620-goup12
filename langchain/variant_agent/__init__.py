@@ -1,1 +1,1 @@
-"""LangChain agent implementation for DKT variant generation."""
+# LangChain agent implementation for DKT variant generation.

@@ -7,6 +7,8 @@ from typing import Any, Dict, TypedDict
 from langchain.agents import AgentExecutor, create_openai_tools_agent
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_openai import ChatOpenAI
+from openai import BadRequestError
+
 from .config import Settings
 from .models import VariantResponse
 from .tools import build_tools
@@ -20,34 +22,34 @@ class AgentResult(TypedDict):
     intermediate_steps: Any
 
 
+# Factory that wraps the LangChain agent workflow.
 class VariantGenerationAgent:
-    """Factory that wraps the LangChain agent workflow."""
-
+    # Initialise the agent with configuration and dedicated planner/tool LLMs.
     def __init__(self, settings: Settings):
         self._settings = settings
-        common_kwargs = dict(
-            model=settings.openai_model,
-            max_tokens=2048,
-            streaming=settings.openai_stream,
-        )
-
+        self._base_llm_kwargs = {
+            "model": settings.openai_model,
+        }
+        token_limit = 2048
+        if self._uses_responses_api(settings.openai_model):
+            self._base_llm_kwargs["max_completion_tokens"] = token_limit
+        else:
+            self._base_llm_kwargs["max_tokens"] = token_limit
         if settings.openai_temperature is not None:
-            common_kwargs["temperature"] = settings.openai_temperature
-
-        init_kwargs = common_kwargs.copy()
-        init_kwargs["openai_api_key"] = settings.openai_api_key
+            self._base_llm_kwargs["temperature"] = settings.openai_temperature
+        self._base_llm_kwargs["openai_api_key"] = settings.openai_api_key
         if settings.openai_base_url:
-            init_kwargs["openai_api_base"] = settings.openai_base_url
+            self._base_llm_kwargs["openai_api_base"] = settings.openai_base_url
 
-        # LLM for planning/thinking.
-        self._planner_llm = ChatOpenAI(**init_kwargs)
-        # Separate LLM instance for tool calls (avoids throttling shared state).
-        self._tool_llm = ChatOpenAI(**init_kwargs)
+        self._streaming_enabled = bool(settings.openai_stream)
+        self._init_llms(self._streaming_enabled)
 
+    # Run the agent toolkit to generate variant questions for an input prompt.
     def generate(self, original_question: str, num_variants: int) -> AgentResult:
         if num_variants < 1 or num_variants > 5:
             raise ValueError("`num` must be between 1 and 5.")
         usage_tracker = UsageTracker()
+        # Build tool instances that share the tool LLM so token usage is centralised.
         tools = build_tools(
             tool_llm=self._tool_llm,
             usage_tracker=usage_tracker,
@@ -55,6 +57,7 @@ class VariantGenerationAgent:
         )
 
         prompt = self._build_prompt()
+        # Construct a runnable agent chain with OpenAI tool-calling support.
         agent_runnable = create_openai_tools_agent(self._planner_llm, tools, prompt)
 
         executor = AgentExecutor(
@@ -63,18 +66,28 @@ class VariantGenerationAgent:
             verbose=self._settings.log_intermediate,
             max_iterations=12,
             return_intermediate_steps=True,
+            stream_runnable=False,
         )
 
         callbacks = [UsageCallbackHandler(usage_tracker)]
         start = time.perf_counter()
-        result = executor.invoke(
-            {
-                "input": "Begin the variant generation workflow.",
-                "original_question": original_question,
-                "target_count": num_variants,
-            },
-            config={"callbacks": callbacks},
-        )
+        # Kick off the agent loop, seeding context inputs for the workflow.
+        try:
+            result = executor.invoke(
+                {
+                    "input": "Begin the variant generation workflow.",
+                    "original_question": original_question,
+                    "target_count": num_variants,
+                },
+                config={"callbacks": callbacks},
+            )
+        except BadRequestError as exc:
+            if self._streaming_enabled and self._should_retry_without_streaming(exc):
+                if self._settings.log_intermediate:
+                    print("[agent] Streaming unsupported; retrying without streaming.")
+                self._init_llms(False)
+                return self.generate(original_question, num_variants)
+            raise
 
         elapsed_ms = int((time.perf_counter() - start) * 1000)
 
@@ -96,6 +109,17 @@ class VariantGenerationAgent:
             intermediate_steps=result.get("intermediate_steps"),
         )
 
+    # Build planner/tool LLM instances with the desired streaming configuration.
+    def _init_llms(self, streaming: bool) -> None:
+        init_kwargs = self._base_llm_kwargs.copy()
+        init_kwargs["streaming"] = streaming
+        # LLM for planning/thinking.
+        self._planner_llm = ChatOpenAI(**init_kwargs)
+        # Separate LLM instance for tool calls (avoids throttling shared state).
+        self._tool_llm = ChatOpenAI(**init_kwargs)
+        self._streaming_enabled = streaming
+
+    # Build the system + human prompt that constrains the agent workflow.
     def _build_prompt(self) -> ChatPromptTemplate:
         system_message = (
             "You are LangChain Agent DK-Variant tasked with generating alternative Australian DKT exam "
@@ -130,6 +154,7 @@ class VariantGenerationAgent:
             ]
         )
 
+    # Parse the agent's textual response into a Python dictionary.
     def _parse_agent_output(self, output_text: Any) -> Dict[str, Any]:
         if isinstance(output_text, dict):
             return output_text
@@ -151,6 +176,7 @@ class VariantGenerationAgent:
                     return {}
         return {}
 
+    # Ensure the payload contains the requested number of variants with clean fields.
     def _post_process_payload(self, payload: Dict[str, Any], num_variants: int) -> Dict[str, Any]:
         knowledge_point_name = payload.get("knowledge_point_name") or ""
         knowledge_point_summary = payload.get("knowledge_point_summary") or ""
@@ -160,6 +186,7 @@ class VariantGenerationAgent:
 
         normalised_variants = []
         for item in variants:
+            # Skip malformed entries and coerce each field into the expected structure.
             if not isinstance(item, dict):
                 continue
             normalised = {
@@ -192,6 +219,32 @@ class VariantGenerationAgent:
         }
 
 
+    # Detect OpenAI errors that indicate streaming is not permitted.
+    def _should_retry_without_streaming(self, exc: BadRequestError) -> bool:
+        error_message = ""
+        try:
+            error_message = exc.body.get("error", {}).get("message", "")  # type: ignore[attr-defined]
+        except Exception:
+            error_message = ""
+        combined = f"{error_message} {exc}".lower()
+        return "stream" in combined and ("verify" in combined or "unsupported" in combined)
+
+    @staticmethod
+    def _uses_responses_api(model_name: str) -> bool:
+        prefixes = (
+            "gpt-4.1",
+            "gpt-4o",
+            "gpt-5",
+            "chatgpt-4o",
+            "o1",
+            "o3",
+            "o4",
+            "o-mini",
+        )
+        normalized = (model_name or "").lower()
+        return normalized.startswith(prefixes)
+
+
+# Convert dict payload into the typed VariantResponse model.
 def build_variant_response(data: Dict[str, Any]) -> VariantResponse:
-    """Convert dict payload into the typed VariantResponse model."""
     return VariantResponse.model_validate(data)

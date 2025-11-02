@@ -18,6 +18,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(mess
 app = FastAPI(title="LangChain Variant Agent", version="1.0.0")
 
 
+# Provide a shared agent instance per app lifecycle.
 def get_agent(settings: Settings = Depends(get_settings)) -> VariantGenerationAgent:
     # Reuse agent instance across requests.
     if not hasattr(app.state, "variant_agent"):
@@ -25,7 +26,9 @@ def get_agent(settings: Settings = Depends(get_settings)) -> VariantGenerationAg
     return app.state.variant_agent
 
 
+# Main AI Agent API enter point:
 @app.post("/api/generateVariant")
+# Handle variant generation requests from the Flask frontend.
 async def generate_variant(
     payload: VariantRequest,
     authorization: Optional[str] = Header(None),
@@ -60,6 +63,7 @@ async def generate_variant(
         ) from exc
 
 
+# Parse the bearer token value from the Authorization header.
 def _extract_token(authorization_header: Optional[str]) -> Optional[str]:
     if not authorization_header or not authorization_header.startswith("Bearer "):
         return None

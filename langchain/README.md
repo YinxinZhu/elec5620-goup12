@@ -1,6 +1,6 @@
-# LangChain Variant Agent
+# LangChain AI Agent
 
-This service wraps a LangChain-based agent that generates Australian DKT theory test variants. It exposes the same HTTP contract as the existing Node.js proxy so the Flask app can switch between them without code changes.
+This service wraps a LangChain-based agent that generates Australian DKT theory test variants. It exposes the API service, so the Flask app can request for ai-generated variant questions.
 
 ## Features
 
@@ -22,6 +22,9 @@ This service wraps a LangChain-based agent that generates Australian DKT theory 
    ```bash
    uvicorn server:app --host 0.0.0.0 --port 28899
    ```
+   Important notes: 
+   - You can not run by `python server.py`, errors will occur.
+   - You need to restart the LangChain server when you make changes to codes. The Flask main server does not need restarting for changes to be effective.
 4. Call the API (matches the Node proxy):
    ```bash
    curl -X POST http://localhost:28899/api/generateVariant \

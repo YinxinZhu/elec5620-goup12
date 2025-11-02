@@ -23,6 +23,39 @@
     box-shadow: 0 1.25rem 2.5rem rgba(15, 23, 42, 0.25);
     padding: 2rem;
   }
+  .agent-toggle {
+    display: inline-flex;
+    align-items: center;
+    border-radius: 15px;
+    background-color: #e2e8f0;
+    padding: 0.25rem;
+    gap: 0.25rem;
+  }
+  .agent-toggle .agent-toggle-input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+  }
+  .agent-toggle .agent-toggle-label {
+    cursor: pointer;
+    border-radius: 12px;
+    padding: 0.5rem 1.25rem;
+    font-weight: 500;
+    color: #475569;
+    transition: all 0.2s ease;
+    user-select: none;
+    min-width: 5.5rem;
+    text-align: center;
+  }
+  .agent-toggle .agent-toggle-input:checked + .agent-toggle-label {
+    background-color: #ffffff;
+    color: #0f172a;
+    box-shadow: 0 0.2rem 0.4rem rgba(15, 23, 42, 0.15);
+  }
+  .agent-toggle .agent-toggle-label:focus-visible {
+    outline: 2px solid #2563eb;
+    outline-offset: 2px;
+  }
 </style>
 <div class="d-flex flex-column flex-lg-row align-items-lg-center justify-content-between gap-3 mb-4">
   <div>
@@ -66,15 +99,17 @@
       action="{{ url_for('student.variant_generate') }}"
       data-generate-url="{{ url_for('student.variant_generate') }}"
       data-question-id="{{ base_question.id }}"
+      data-agent-default="{{ variant_agent_default }}"
     >
       <input type="hidden" name="questionId" value="{{ base_question.id }}">
-      <div class="col-sm-4 col-md-3">
+      <div class="row-3">
         <label for="variant_count" class="form-label">{{ _('Variants to generate') }}</label>
         <input
           type="number"
           id="variant_count"
           name="variantCount"
           class="form-control"
+          style="width: 100px;"
           value="{{ variant_default_count }}"
           min="{{ variant_min_count }}"
           max="{{ variant_max_count }}"
@@ -84,9 +119,35 @@
           {{ _('Allowed range') }}: {{ variant_min_count }}-{{ variant_max_count }}
         </div>
       </div>
+      <div class="row-3">
+        <label class="form-label d-block">{{ _('AI Agent') }}</label>
+        <div class="agent-toggle" role="radiogroup" aria-label="{{ _('AI agent') }}">
+          <input
+            type="radio"
+            class="agent-toggle-input"
+            name="agentMode"
+            id="agent-mode-fast"
+            value="fast"
+            {% if variant_agent_default != 'complex' %}checked{% endif %}
+          >
+          <label class="agent-toggle-label" for="agent-mode-fast">{{ _('Fast') }}</label>
+          <input
+            type="radio"
+            class="agent-toggle-input"
+            name="agentMode"
+            id="agent-mode-complex"
+            value="complex"
+            {% if variant_agent_default == 'complex' %}checked{% endif %}
+          >
+          <label class="agent-toggle-label" for="agent-mode-complex">{{ _('Complex') }}</label>
+        </div>
+        <div class="form-text">
+          {{ _('Choose the AI agent that suits your needs.') }}
+        </div>
+      </div>
       <div class="col-12">
         <button type="submit" class="btn btn-lg btn-primary" id="variant-generate-submit">
-          {{ _('Generate variants') }}
+          {{ _('Generate Variant Questions') }}
         </button>
       </div>
     </form>
@@ -141,14 +202,14 @@
   role="dialog"
   aria-modal="true"
   aria-live="polite"
-  data-start-text="{{ _('Contacting the AI service. This may take around 10 seconds...') }}"
+  data-start-text="{{ _('AI-Agent is generating variant questions for you. This may take around 10 seconds...') }}"
   data-success-text="{{ _('Variants ready! Loading results...') }}"
   data-error-text="{{ _('Generation failed. Please try again.') }}"
 >
   <div class="variant-progress-panel text-center">
     <h2 class="h5 mb-3">{{ _('Generating variants') }}</h2>
     <p class="text-muted mb-4" id="variant-progress-label">
-      {{ _('Contacting the AI service. This may take around 10 seconds...') }}
+      {{ _('AI-Agent is generating variant questions for you. This may take around 10 seconds...') }}
     </p>
     <div class="progress" role="progressbar" aria-describedby="variant-progress-label">
       <div
@@ -269,6 +330,8 @@
       const countInput = form.querySelector("#variant_count");
       const countValue = Number.parseInt(countInput.value, 10);
       const questionId = Number.parseInt(form.dataset.questionId, 10);
+      const agentInput = form.querySelector('input[name="agentMode"]:checked');
+      const agentMode = agentInput ? agentInput.value : form.dataset.agentDefault || "fast";
 
       if (!Number.isFinite(questionId)) {
         return;
@@ -287,6 +350,7 @@
           body: JSON.stringify({
             questionId,
             variantCount: countValue,
+            agentMode,
           }),
         });
 
