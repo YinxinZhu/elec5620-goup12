@@ -1,9 +1,9 @@
 ﻿# DKT Learning Assistant
 ## Learner Practice Portal (Unified Web Experience)
 
-**Table of contents**
+**Table of Contents**
 
-- [Project overview](#project-overview)
+- [Project Overview](#project-overview)
 - [Configuration & Deployment](#configuration--deployment)
 - [Advanced Technologies](#advanced-technologies)
 - [AI Agent](#ai-agent)
