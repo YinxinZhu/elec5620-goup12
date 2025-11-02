@@ -52,6 +52,17 @@ learner self-registration form directly beneath the login action.
 
 ### Installation guide
 
+#### One-command bootstrap (recommended for local demos)
+
+```bash
+scripts/bootstrap.sh
+```
+
+The helper script creates a `.venv` virtual environment, installs the
+dependencies, initialises the SQLite database, seeds demo data, and launches the
+development server. Pass `--no-seed` to skip demo fixtures or `--skip-run` to
+only prepare the environment.
+
 1. **Install dependencies**
    ```bash
    pip install --upgrade pip
